@@ -141,7 +141,7 @@ in `docs/BUILD_PLAN.md` — Database Design):
 | UI | React 19, TypeScript, Tailwind CSS v4 |
 | Database | PostgreSQL (via local EnvKit stack) |
 | ORM | Prisma |
-| Auth | Auth.js (email + password) |
+| Auth | Better Auth (email + password) |
 | Validation | Zod |
 
 ## 11. Success Metrics (MVP)

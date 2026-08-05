@@ -14,7 +14,7 @@ export default async function MentorProfilePage({
     <Placeholder
       title="Mentor Profile"
       description={`Profile for mentor ${id}.`}
-      planned={["Headline, bio and experience", "Offered skills", "Send a mentorship request"]}
+      planned={["Bio and experience", "Offered skills", "Send a mentorship request"]}
     />
   );
 }

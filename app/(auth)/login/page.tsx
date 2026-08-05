@@ -1,5 +1,13 @@
 import type { Metadata } from "next";
-import { Placeholder } from "@/components/placeholder";
+import Link from "next/link";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { LoginForm } from "@/components/auth/login-form";
 
 export const metadata: Metadata = {
   title: "Sign in",
@@ -7,10 +15,25 @@ export const metadata: Metadata = {
 
 export default function LoginPage() {
   return (
-    <Placeholder
-      title="Welcome back"
-      description="Sign in to send requests or manage your mentorship inbox."
-      planned={["Email + password login", "Session handling"]}
-    />
+    <Card className="w-full max-w-sm">
+      <CardHeader>
+        <CardTitle>Welcome back</CardTitle>
+        <CardDescription>
+          Sign in to send requests, manage your requests, and answer learners.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <LoginForm />
+        <p className="text-sm text-muted-foreground">
+          New to SkillBridge?{" "}
+          <Link
+            href="/signup"
+            className="font-medium text-primary hover:underline"
+          >
+            Create an account
+          </Link>
+        </p>
+      </CardContent>
+    </Card>
   );
 }

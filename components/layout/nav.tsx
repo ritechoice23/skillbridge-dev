@@ -8,18 +8,24 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { getSession } from "@/lib/auth/dal";
+import { signOut } from "@/lib/actions/auth";
 
-const primaryLinks = [
-  { href: "/mentors", label: "Find Mentors" },
-];
+const primaryLinks = [{ href: "/mentors", label: "Find Mentors" }];
 
-const mobileLinks = [
-  ...primaryLinks,
-  { href: "/auth/login", label: "Sign in" },
-  { href: "/auth/signup", label: "Get started" },
-];
+export async function Nav() {
+  const session = await getSession();
+  const user = session?.user;
 
-export function Nav() {
+  const authLinks = user
+    ? [{ href: "/dashboard", label: "Dashboard" }]
+    : [
+        { href: "/login", label: "Sign in" },
+        { href: "/signup", label: "Get started" },
+      ];
+
+  const mobileLinks = [...primaryLinks, ...authLinks];
+
   return (
     <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur supports-backdrop-filter:bg-background/60">
       <nav className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between gap-4 px-4">
@@ -41,12 +47,25 @@ export function Nav() {
           ))}
         </div>
 
-        <div className="hidden items-center gap-2 sm:flex">
-          <Button variant="ghost" render={<Link href="/auth/login" />}>
-            Sign in
-          </Button>
-          <Button render={<Link href="/auth/signup" />}>Get started</Button>
-        </div>
+        {user ? (
+          <div className="hidden items-center gap-2 sm:flex">
+            <span className="max-w-40 truncate text-sm text-muted-foreground">
+              {user.name}
+            </span>
+            <form action={signOut}>
+              <Button variant="ghost" type="submit">
+                Sign out
+              </Button>
+            </form>
+          </div>
+        ) : (
+          <div className="hidden items-center gap-2 sm:flex">
+            <Button variant="ghost" render={<Link href="/login" />}>
+              Sign in
+            </Button>
+            <Button render={<Link href="/signup" />}>Get started</Button>
+          </div>
+        )}
 
         <div className="sm:hidden">
           <Sheet>
@@ -72,6 +91,13 @@ export function Nav() {
                     {link.label}
                   </Button>
                 ))}
+                {user ? (
+                  <form action={signOut}>
+                    <Button variant="ghost" type="submit" className="justify-start">
+                      Sign out
+                    </Button>
+                  </form>
+                ) : null}
               </div>
             </SheetContent>
           </Sheet>

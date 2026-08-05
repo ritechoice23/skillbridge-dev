@@ -247,3 +247,79 @@ dropped via a new forward-only migration `20260805123000_drop_mentor_profile_hea
 (`migrate dev` refused to run non-interactively on the data-loss warning, so
 the drop SQL was hand-written and applied with `migrate deploy`). PRD/BUILD_PLAN
 synchronized. Mentor profile now = bio + experience_years + skills.
+
+## 7. Stage 2: Authentication (Better Auth)
+
+**Trigger:** "lets plan stage 1" (actually Stage 2 planning) — auth research
+concluded Better Auth 1.6.26 over Auth.js v5 beta; user chose Better Auth +
+database sessions. Then "work" + "lets continue stage 2" (build mode), and a
+user request to drop the now-unused `users.password_hash` column.
+
+**What was built:**
+
+- Migration `20260805130000_add_better_auth`: `users` +`email_verified`
+  (bool, default false) +`image` (text), −`password_hash` (user request);
+  new `accounts` (account_id, provider_id, password), `sessions` (token UQ,
+  user_id, ip_address, user_agent, expires_at), `verifications`
+  (identifier, value, expires_at) — all UUID PKs, every FK
+  `onDelete: Restrict, onUpdate: NoAction` (8 FKs total), snake_case,
+  indexes on token/account_id/user_id. Applied forward-only.
+- `lib/auth.ts`: `prismaAdapter(prisma, { provider: "postgresql" })`,
+  explicit `user/session/account/verification` model mapping,
+  `advanced.database.generateId: "uuid"`, custom bcryptjs
+  `hash`/`verify`, `nextCookies()` plugin; `app/api/auth/[...all]/route.ts`
+  (GET/POST).
+- `lib/auth/password.ts` (bcryptjs) — one hasher shared by runtime auth and
+  the seed.
+- Server actions `signUp`/`signIn`/`signOut` (Zod v4 `z.email()`; password
+  policy 8+, letter, number, symbol; 422 duplicate email, 401 bad
+  credentials) + `useActionState` forms on `/signup`/`/login` (shadcn
+  `input`/`label` added).
+- `proxy.ts` (Next 16 middleware replacement): optimistic cookie redirects
+  for protected + auth routes; `lib/auth/dal.ts`:
+  `getSession`/`requireUser`/`requireMentorProfile`; layout guards
+  (dashboard, mentor group, inbox); session-aware nav (fixed stale
+  `/auth/login` → `/login` links).
+- Seed: per-user credential `account` (delete + recreate in transaction).
+
+**Decisions and reasoning:**
+
+- **Better Auth over Auth.js v5**: v5 is still beta and the Auth.js project
+  has been absorbed into Better Auth; Better Auth is stable with first-class
+  Prisma adapter + Next.js cookie handling.
+- **Database sessions over stateless JWT**: revocable, inspectable
+  (`sessions` table), works with restrictive-FK rules.
+- **Passwords in `accounts`** (`provider_id = 'credential'`), never on
+  `users` — Better Auth's native model; `users.password_hash` dropped per
+  explicit user request ("drop db column we may not need again").
+- **Custom bcrypt hash/verify**: one hasher for runtime + seed, no
+  dependency on Better Auth's internal default.
+- **Proxy = optimistic pre-check, DAL = enforcement**: Next 16 proxy can't
+  await DB per request efficiently for every page; real authorization lives
+  in `requireUser`/`requireMentorProfile` in layouts.
+
+**Alternatives considered:** Auth.js v5 beta (rejected: beta, absorbed);
+hand-rolled credentials + JWT (rejected: revocability); storing the hash on
+`users` (rejected: Better Auth account model is canonical).
+
+**Validation:** lint + tsc + build clean — note tsc fails on stale
+`.next/dev/types` after route changes until `next build` regenerates them.
+`migrate status` up-to-date; seed idempotent twice (4/4/12/9/4). Live curl
+flows on a throwaway `next start -p 3100` (dev server on :3000 untouched;
+`BETTER_AUTH_URL` overridden per host): proxy redirects (307 → `/login`,
+signed-in `/login` → `/dashboard`), sign-up 200 + HttpOnly cookie + row in
+`sessions`, duplicate email 422, wrong password 401, demo mentor bcrypt
+sign-in 200, sign-out 200 + row deleted, get-session null after; CSRF guard
+rejects mutating calls without `Origin` (400); RESTRICT FK proven live —
+deleting a user with a live session → 23503. All test artifacts cleaned up.
+
+**Notes for future work:** Demo creds `priya@example.com` / `password123`.
+`BETTER_AUTH_SECRET` + `BETTER_AUTH_URL` in `.env`. The user's dev server
+must be restarted to pick up the new env vars. Mutating curl tests need
+`Content-Type: application/json` **and** an `Origin` header.
+
+**Amendment (same day, post-build):** user asked to "document it" — the auth
+implementation is now captured as a technical reference in `docs/AUTH.md`
+(architecture diagram, per-file walkthrough with file:line references,
+cookie mechanics, verified flow table, configuration, testing recipes).
+BUILD_PLAN step 2.1 points to it.

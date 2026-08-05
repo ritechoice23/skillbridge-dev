@@ -1,5 +1,13 @@
 import type { Metadata } from "next";
-import { Placeholder } from "@/components/placeholder";
+import Link from "next/link";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { SignupForm } from "@/components/auth/signup-form";
 
 export const metadata: Metadata = {
   title: "Create an account",
@@ -7,10 +15,26 @@ export const metadata: Metadata = {
 
 export default function SignupPage() {
   return (
-    <Placeholder
-      title="Create your account"
-      description="One account for learning and mentoring. You can send requests today and become a discoverable mentor anytime."
-      planned={["Email + password sign-up"]}
-    />
+    <Card className="w-full max-w-sm">
+      <CardHeader>
+        <CardTitle>Create your account</CardTitle>
+        <CardDescription>
+          One account for learning and mentoring. You can become a discoverable
+          mentor anytime — no role to pick now.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <SignupForm />
+        <p className="text-sm text-muted-foreground">
+          Already have an account?{" "}
+          <Link
+            href="/login"
+            className="font-medium text-primary hover:underline"
+          >
+            Sign in
+          </Link>
+        </p>
+      </CardContent>
+    </Card>
   );
 }

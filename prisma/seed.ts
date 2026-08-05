@@ -1,6 +1,6 @@
-import bcrypt from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../lib/generated/prisma/client";
+import { hashPassword } from "../lib/auth/password";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
@@ -55,8 +55,6 @@ const MENTORS = [
 
 async function main() {
   const result = await prisma.$transaction(async (tx) => {
-    const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
-
     for (const name of SKILLS) {
       await tx.skill.upsert({
         where: { name },
@@ -75,7 +73,18 @@ async function main() {
         create: {
           email: mentor.email,
           name: mentor.name,
-          passwordHash,
+        },
+      });
+
+      const passwordHash = await hashPassword(DEMO_PASSWORD);
+
+      await tx.account.deleteMany({ where: { userId: user.id } });
+      await tx.account.create({
+        data: {
+          userId: user.id,
+          accountId: user.id,
+          providerId: "credential",
+          password: passwordHash,
         },
       });
 
@@ -106,6 +115,7 @@ async function main() {
       profiles: await tx.mentorProfile.count(),
       skills: await tx.skill.count(),
       mentorSkills: await tx.mentorSkill.count(),
+      accounts: await tx.account.count(),
     };
   });
 

@@ -1,8 +1,11 @@
-export default function MentorLayout({
+import { requireUser } from "@/lib/auth/dal";
+
+export default async function MentorLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  await requireUser();
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8">
       <div className="flex flex-col gap-1">
