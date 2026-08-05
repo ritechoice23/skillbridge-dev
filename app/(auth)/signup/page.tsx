@@ -9,8 +9,8 @@ export default function SignupPage() {
   return (
     <Placeholder
       title="Create your account"
-      description="Join SkillBridge as a learner or a mentor."
-      planned={["Email + password sign-up", "Choose your role"]}
+      description="One account for learning and mentoring. You can send requests today and become a discoverable mentor anytime."
+      planned={["Email + password sign-up"]}
     />
   );
 }

@@ -149,3 +149,44 @@ renders, zero stock create-next-app content, mobile menu trigger present.
 
 **Notes for future work:** Next phase — 1.1 database setup (Postgres 17.2 is
 running in EnvKit; create `skillbridge` DB, Prisma 7 with `@prisma/adapter-pg`).
+
+## 5. Role model pivot: no fixed roles
+
+**Trigger:** User decision — the app was planned with learners OR mentors as
+separate sign-up roles; that is now open: "an authenticated user can play any
+of the roles. A learner to someone can also be a mentor to another, so they
+can just be discovered as it is."
+
+**What was built:** Documentation- and copy-level update of the role model:
+
+- `docs/PRD.md`: new role-model section (5.3), reworded user stories
+  (US-01/02), FR-AUTH-2/3, FR-REQUEST-1, FR-PROFILE-1, data-model overview,
+  open questions (role switching resolved).
+- `docs/BUILD_PLAN.md`: `users` table loses the `role` column + CHECK;
+  new design decision "No fixed role — one account, both roles" (mentor
+  status derived from `mentor_profiles` existence); step 2.2 renamed
+  "Guards" (`requireUser` + `requireMentorProfile`); sign-up has no role
+  picker; 4.1/4.3/5.1 reworded for any user; phase table + index note.
+- `docs/PROGRESS.md`: step names + decisions + session entry.
+- `app/(auth)/signup/page.tsx`: placeholder copy — no "Choose your role".
+
+**Decisions and reasoning:**
+
+- No `role` column in the database: role is derived state, not stored
+  state. A user with a `mentor_profiles` row is a mentor; every
+  authenticated user can send requests. Guards check profile existence,
+  never a role flag.
+- Request status CHECK constraint stays (a real state machine); the role
+  CHECK is gone with the column.
+
+**Alternatives considered:** Keeping a role column with a "both" option —
+rejected: derived state avoids sync bugs (a user with no profile could still
+claim mentor) and the schema stays minimal.
+
+**Validation:** eslint + `tsc --noEmit` clean (code change was placeholder
+copy only). Docs reviewed for stale "learner"/"role at sign-up" references —
+remaining "learner" phrasing is persona-perspective and intentional.
+
+**Notes for future work:** Prisma schema (Stage 1.2) must NOT include a
+`role` field; the seed script creates demo mentors by adding
+`mentor_profiles` rows, not by setting a role.

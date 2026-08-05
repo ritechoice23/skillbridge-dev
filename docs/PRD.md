@@ -45,21 +45,28 @@ request) easy and structured.
 
 ## 5. Personas
 
-### 5.1 Learner (Alex)
+### 5.1 Alex (learner)
 Wants to learn a practical skill (e.g. web development, public speaking,
 graphic design). Needs to find someone credible, see what they offer, and
 reach out without friction.
 
-### 5.2 Mentor (Priya)
+### 5.2 Priya (mentor)
 Has practical experience in one or more skills. Wants to help others, show
 her expertise, and manage which requests she responds to.
+
+### 5.3 Role model (both roles, one account)
+There is no fixed role. Any authenticated user can send mentorship requests
+(act as a learner) and, at the same time, create a public mentor profile to
+be discovered and receive requests (act as a mentor). A learner to one
+person can be a mentor to another. Being a mentor is derived from having a
+public profile — not from a sign-up choice.
 
 ## 6. User Stories
 
 | ID | As a… | I want to… | So that… |
 |---|---|---|---|
-| US-01 | user | create an account (email + password) and log in | my identity and role are recognised |
-| US-02 | mentor | create and edit a public profile (headline, bio, years of experience, skills) | learners can find and evaluate me |
+| US-01 | user | create an account (email + password) and log in | my identity is recognised across both roles |
+| US-02 | user | create and edit a public mentor profile (headline, bio, years of experience, skills) | learners can find and evaluate me — without choosing a role at sign-up |
 | US-03 | learner | browse the mentor directory | discover mentors |
 | US-04 | learner | search and filter mentors by skill | find mentors for the skill I want to learn |
 | US-05 | learner | view a mentor's public profile | decide whether to reach out |
@@ -72,9 +79,12 @@ her expertise, and manage which requests she responds to.
 
 ### 7.1 Authentication (FR-AUTH)
 - FR-AUTH-1: Email + password sign-up and login (sessions).
-- FR-AUTH-2: Users choose a role at sign-up: **learner** or **mentor**.
-- FR-AUTH-3: Protected routes: mentor dashboard, inbox, profile editing, and
-  learner dashboard require login.
+- FR-AUTH-2: No role at sign-up. Every authenticated user can send
+  mentorship requests (learner behaviour) and can become a mentor at any
+  time by creating a public mentor profile.
+- FR-AUTH-3: Protected routes require login: dashboard, mentor profile
+  editing, and mentor inbox. Mentor routes additionally require the user to
+  have a mentor profile; a user without one is guided to create it.
 - FR-AUTH-4: A user must not modify or access another user's requests or
   profile.
 
@@ -85,19 +95,20 @@ her expertise, and manage which requests she responds to.
   experience, skills.
 
 ### 7.3 Mentorship Requests (FR-REQUEST)
-- FR-REQUEST-1: A logged-in learner can send a request to a mentor: message
+- FR-REQUEST-1: A logged-in user can send a request to a mentor: message
   (required, max length enforced) and focus skill (optional).
-- FR-REQUEST-2: A learner cannot send a request to the same mentor twice for
+- FR-REQUEST-2: A user cannot send a request to the same mentor twice for
   the same focus skill while a request is pending.
 - FR-REQUEST-3: Requests are stored in the database and appear in the
-  mentor's inbox with learner details.
-- FR-REQUEST-4: Mentor can accept or decline; learner sees the updated
+  mentor's inbox with the requester's details.
+- FR-REQUEST-4: Mentor can accept or decline; requester sees the updated
   status. Statuses: `pending`, `accepted`, `declined`.
 
 ### 7.4 Mentor Profile Management (FR-PROFILE)
-- FR-PROFILE-1: Mentor can create/edit headline, bio, years of experience,
-  and a list of skills (from a shared skill catalog).
-- FR-PROFILE-2: Only the owning mentor can edit their profile.
+- FR-PROFILE-1: Any user can create a mentor profile (headline, bio, years
+  of experience, and skills from the shared catalog), making them
+  discoverable as a mentor.
+- FR-PROFILE-2: Only the owning user can edit their profile.
 
 ## 8. Non-Functional Requirements
 
@@ -115,7 +126,8 @@ her expertise, and manage which requests she responds to.
 PostgreSQL database with the following application-owned tables (full design
 in `docs/BUILD_PLAN.md` — Database Design):
 
-- `users` — accounts (learner or mentor).
+- `users` — accounts. No fixed role: any user can send requests and can
+  create a mentor profile to be discovered.
 - `mentor_profiles` — one per mentor user.
 - `skills` — shared skill catalog.
 - `mentor_skills` — which skills a mentor offers.
@@ -140,6 +152,9 @@ in `docs/BUILD_PLAN.md` — Database Design):
 
 ## 12. Open Questions
 
-- Should learners be able to switch roles later (learner → mentor)?
 - Should requests auto-expire if unanswered for N days?
 - Skill catalog: seeded fixed list for MVP; management later.
+- Should the mentor profile creation flow be a guided onboarding wizard
+  after sign-up, or a standalone "Become a mentor" page?
+- Resolved: no fixed roles — one account plays both learner and mentor
+  (see 5.3).

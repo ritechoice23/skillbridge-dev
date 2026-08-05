@@ -10,9 +10,9 @@ decisions. Status is tracked in `docs/PROGRESS.md`.
 |---|---|---|
 | 0 | Foundations | 0.0 shadcn setup, 0.1 Design system & layout, 0.2 Routing structure |
 | 1 | Data layer | 1.1 Database setup, 1.2 Schema & migrations, 1.3 Seed data |
-| 2 | Authentication | 2.1 Auth.js setup, 2.2 Roles & guards |
+| 2 | Authentication | 2.1 Auth.js setup, 2.2 Guards |
 | 3 | Mentor discovery | 3.1 Directory, 3.2 Search & filter, 3.3 Mentor profile page |
-| 4 | Requests | 4.1 Request form, 4.2 Persistence, 4.3 Learner dashboard |
+| 4 | Requests | 4.1 Request form, 4.2 Persistence, 4.3 Requester dashboard |
 | 5 | Mentor side | 5.1 Profile management, 5.2 Inbox & respond |
 | 6 | Polish & ship | 6.1 Empty/error states, 6.2 SEO & meta, 6.3 Build & deploy |
 
@@ -29,7 +29,7 @@ Migrations are **forward-only** and immutable once executed.
 ### Entity relationship (logical)
 
 ```
-users (id PK, email UQ, password_hash, role)
+users (id PK, email UQ, password_hash)
   │
   └─ 1:1 ── mentor_profiles (id PK, user_id FK UNIQUE → users)
                   │
@@ -49,7 +49,6 @@ skills (id PK, name UQ)
 | email | varchar(255) | NOT NULL, UNIQUE |
 | password_hash | varchar(255) | NOT NULL |
 | name | varchar(100) | NOT NULL |
-| role | varchar(20) | NOT NULL, default `'learner'`, CHECK in (`learner`,`mentor`) |
 | created_at | timestamptz | NOT NULL, default now() |
 | updated_at | timestamptz | NOT NULL, default now() |
 
@@ -105,11 +104,17 @@ Indexes: unique on `(mentor_profile_id, skill_id)`; index on `skill_id`
 | created_at | timestamptz | NOT NULL, default now() |
 | updated_at | timestamptz | NOT NULL, default now() |
 
-Indexes: `mentor_profile_id` (inbox query), `requester_id` (learner
+Indexes: `mentor_profile_id` (inbox query), `requester_id` (requester
 dashboard), `status`.
 
 ### Design decisions
 
+- **No fixed role — one account, both roles.** `users` has no `role`
+  column. Any authenticated user can send mentorship requests (learner
+  behaviour); a user *is* a mentor when a `mentor_profiles` row exists
+  (created through profile management). A learner to someone can be a mentor
+  to another; guarding "mentor" routes means checking for a mentor profile,
+  not a role flag.
 - **UUID PKs everywhere** — per project/global database principles; no
   auto-increment integers.
 - **Restrictive FKs, no cascades** — deleting a user, profile, or skill with
@@ -118,11 +123,12 @@ dashboard), `status`.
   removal from a profile removes the `mentor_skills` row explicitly).
 - **`gen_random_uuid()`** — PostgreSQL 13+ built-in; no extension beyond
   `pgcrypto` (built into `gen_random_uuid` since PG13).
-- **Enum as CHECK constraints** — avoids Postgres enum migration pain;
-  forward-only friendly (CHECK can be widened via new migration if needed).
-- **Single canonical `mentorship_requests` table** — inbox and learner
+- **Enum as CHECK constraint** (only where a real state machine exists:
+  request `status`) — avoids Postgres enum migration pain; forward-only
+  friendly (CHECK can be widened via new migration if needed).
+- **Single canonical `mentorship_requests` table** — inbox and requester
   dashboard are both read from it (mentor side via `mentor_profile_id`,
-  learner side via `requester_id`).
+  requester side via `requester_id`).
 - **Skill catalog shared** — `skills` is a shared table; `mentor_skills`
   links mentors to it. Filtering by skill joins through the pivot, which the
   unique pair index backs.
@@ -184,7 +190,7 @@ dashboard), `status`.
 - **Tasks:**
   - Public: `/` (landing), `/mentors` (directory), `/mentors/[slug]`
     (profile), `/auth/signup`, `/auth/login`.
-  - Protected (learner): `/dashboard` (my requests).
+  - Protected: `/dashboard` (my requests).
   - Protected (mentor): `/mentor/profile` (manage profile), `/mentor/inbox`.
   - Placeholder pages returning "under construction" until later steps.
 - **Files:** `app/mentors/page.tsx`, `app/mentors/[id]/page.tsx`,
@@ -257,29 +263,38 @@ dashboard), `status`.
     provider.
   - Prisma adapter wiring; session strategy; `auth()` helper + middleware
     for route protection.
-  - Sign-up Action: validate (Zod), hash password, create `User` (role from
-    form), return session; login Action.
-  - Forms on `/auth/signup` and `/auth/login` with error display.
+  - Sign-up Action: validate (Zod), hash password, create `User` (no role —
+    one account serves both learner and mentor behaviour), return session;
+    login Action.
+  - Forms on `/auth/signup` and `/auth/login` with error display; no role
+    picker at sign-up.
 - **Files:** `auth.ts`, `app/api/auth/[...nextauth]/route.ts` (if needed),
   `app/(auth)/signup/page.tsx`, `app/(auth)/login/page.tsx`,
   `lib/actions/auth.ts`, `lib/validation/auth.ts`.
 - **Acceptance criteria:** sign-up → logged in; wrong password rejected;
   passwords never stored in plain text; sessions persist across refresh.
 - **Decisions:** Auth.js v5; email+password only (no OAuth in MVP); password
-  hashing with bcrypt.
+  hashing with bcrypt; no role at sign-up — mentoring is opt-in via profile.
 
-### Step 2.2 — Roles & guards
+### Step 2.2 — Guards
 
-- **Objective:** Learner/mentor role enforcement.
+- **Objective:** Route protection with no fixed roles.
 - **Tasks:**
-  - `requireUser()` / `requireMentor()` helpers; mentor-only routes check
-    `role === 'mentor'` and ownership (`mentor_profile.user_id === user.id`).
-  - Redirect unauthenticated users to `/auth/login`.
+  - `requireUser()` helper; protected routes redirect unauthenticated users
+    to `/auth/login`.
+  - `requireMentorProfile()` helper: `/mentor/*` routes require the
+    authenticated user to own a `mentor_profiles` row; a user without one is
+    guided to create a profile (linking to the profile page).
+  - Ownership checks: profile editing and inbox actions verify
+    `mentor_profile.user_id === user.id`.
 - **Files:** `lib/auth/guards.ts`, route layout/server components.
-- **Acceptance criteria:** a learner cannot open `/mentor/*`; a mentor
-  cannot edit another mentor's profile; unauthenticated users are redirected.
+- **Acceptance criteria:** unauthenticated users are redirected; a user
+  without a mentor profile cannot open `/mentor/*` and is guided to create
+  one; nobody can edit another user's profile; a mentor can still send
+  requests as a learner (both roles, one account).
 - **Decisions:** Server-side guards in layouts/server components; no
-  client-only gating (security).
+  client-only gating (security); "is a mentor" is derived from profile
+  existence, never a role flag.
 
 ---
 
@@ -325,7 +340,8 @@ dashboard), `status`.
 
 ### Step 4.1 — Request form
 
-- **Objective:** Learner can compose a mentorship request.
+- **Objective:** Any authenticated user can compose a mentorship request
+  (mentors included — a mentor is also a learner to others).
 - **Tasks:**
   - Zod schema: message (required, ≤ 2000 chars), optional skill (must be
     one the mentor offers).
@@ -348,9 +364,10 @@ dashboard), `status`.
 - **Decisions:** Duplicate check + insert in one transaction; no cascade
   behaviour — only deliberate inserts.
 
-### Step 4.3 — Learner dashboard
+### Step 4.3 — Requester dashboard
 
-- **Objective:** `/dashboard` lists the learner's requests with status.
+- **Objective:** `/dashboard` lists the user's requests with status (any
+  authenticated user, including mentors).
 - **Tasks:**
   - Query by `requester_id`; show mentor name, skill, message snippet,
     status badge; empty state.
@@ -365,7 +382,9 @@ dashboard), `status`.
 
 ### Step 5.1 — Profile management
 
-- **Objective:** Mentor creates/edits their public profile.
+- **Objective:** Any user can create/edit their public mentor profile;
+  creating one makes them discoverable as a mentor (no sign-up role
+  required).
 - **Tasks:**
   - `UpsertMentorProfile` Action: transaction creating/updating profile and
     replacing `mentor_skills` (explicit delete of old rows, then insert —
@@ -384,12 +403,12 @@ dashboard), `status`.
 - **Objective:** Mentor sees requests and accepts/declines.
 - **Tasks:**
   - `/mentor/inbox`: list requests (by `mentor_profile_id`), newest first;
-    learner name, message, skill, status.
+    requester name, message, skill, status.
   - `RespondToRequest` Action: only the owning mentor; sets status +
     `decided_at` in a transaction; re-responding is blocked.
 - **Files:** `app/mentor/inbox/page.tsx`, `lib/actions/requests.ts`.
 - **Acceptance criteria:** only that mentor's requests visible; decision
-  saved once and reflected on the learner dashboard.
+  saved once and reflected on the requester dashboard.
 - **Decisions:** Status transitions: `pending → accepted | declined` only;
   enforcement in Action (not just UI).
 

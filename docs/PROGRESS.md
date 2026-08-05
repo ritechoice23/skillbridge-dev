@@ -23,13 +23,13 @@ append a session log entry.
 | | 1.2 Schema & migrations | ⬜ |
 | | 1.3 Seed data | ⬜ |
 | 2 Authentication | 2.1 Auth.js setup | ⬜ |
-| | 2.2 Roles & guards | ⬜ |
+| | 2.2 Guards | ⬜ |
 | 3 Mentor discovery | 3.1 Mentor directory | ⬜ |
 | | 3.2 Search & filter | ⬜ |
 | | 3.3 Mentor profile page | ⬜ |
 | 4 Requests | 4.1 Request form | ⬜ |
 | | 4.2 Persistence | ⬜ |
-| | 4.3 Learner dashboard | ⬜ |
+| | 4.3 Requester dashboard | ⬜ |
 | 5 Mentor side | 5.1 Profile management | ⬜ |
 | | 5.2 Inbox & respond | ⬜ |
 | 6 Polish & ship | 6.1 Empty/error states | ⬜ |
@@ -47,8 +47,10 @@ append a session log entry.
   (`docs/PRD.md`). Build plan with full database design written
   (`docs/BUILD_PLAN.md`). Tracker created (this file). AGENTS.md extended
   with the Project Docs System rule. Prompt logging enabled in `.agent/`.
-- **Decisions:** Prisma ORM, Auth.js, roles at sign-up, CHECK-constraint
-  enums, UUID PKs, RESTRICT FKs (no cascades), forward-only migrations.
+- **Decisions:** Prisma ORM, Auth.js, no fixed roles (one account, both
+  roles — mentor status derived from having a public profile),
+  CHECK-constraint enums, UUID PKs, RESTRICT FKs (no cascades), forward-only
+  migrations.
 - **Next:** Step 0.1 — design system & layout shell.
 
 ### 2026-08-05 — Stage 0: Foundations (shadcn)
@@ -68,4 +70,17 @@ append a session log entry.
 - **Decisions:** shadcn for all UI (user directive); `[id]` UUID route
   segment; typed `PageProps` per Next 16 convention; route-group layouts
   typed manually (no single URL path for `LayoutProps`).
+- **Next:** Step 1.1 — database setup (Postgres via EnvKit).
+
+### 2026-08-05 — Role model pivot: no fixed roles
+
+- **Done:** Removed the fixed learner/mentor role model from the docs.
+  Any authenticated user can send requests (learner behaviour) and create a
+  public mentor profile to be discovered (mentor behaviour) — a learner to
+  someone can be a mentor to another. PRD updated (role model section,
+  user stories, FR-AUTH/FR-PROFILE/FR-REQUEST, data model overview, open
+  questions). BUILD_PLAN updated (users table has no `role` column, no
+  CHECK; guards derive mentor status from profile existence; sign-up has no
+  role picker; steps 2.2/4.x/5.1 reworded; index note and phase table).
+  Signup placeholder copy updated. `app/(auth)/signup/page.tsx` text only.
 - **Next:** Step 1.1 — database setup (Postgres via EnvKit).
