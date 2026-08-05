@@ -104,3 +104,48 @@ updated every session.
 
 **Notes for future work:** Phase 0 (design system + routing) is next;
 `.agent/prompts/logs/` now records prompts daily since logging is enabled.
+
+## 4. Stage 0: Foundations (shadcn)
+
+**Trigger:** User approved the Stage 0 plan, then directed: "we need to use
+shadcn for all components, no need to re-invent the wheel."
+
+**What was built:**
+
+- shadcn initialized: `--base base --preset nova` (preset names changed —
+  `base-nova` is no longer valid; style presets are nova/vega/… and the
+  primitive base is a separate flag). `components.json`, `lib/utils.ts`,
+  CSS token system in `app/globals.css`, deps `@base-ui/react`,
+  `lucide-react`, cva/clsx/tailwind-merge/tw-animate-css.
+- Components added: button, badge, card, separator, sheet, skeleton.
+- Brand: deep "landmark green" `--primary` (#00875A light / #00d294 dark,
+  oklch tokens, AA contrast), Geist fonts wired
+  (`--font-sans` was self-referential after init — fixed), system dark mode
+  via one inline `matchMedia` script toggling `.dark`.
+- Shell: `Nav` (logo, ghost links, `Sheet` mobile menu with sr-only title),
+  `Footer` (Separator + links), root layout with title template `%s |
+  SkillBridge` + viewport theme colors, `Card`-based 404.
+- Landing: hero (Badge, headline, CTA buttons with `data-icon` arrow) +
+  three "How it works" cards.
+- Routing: `/mentors`, `/mentors/[id]`, `(auth)/signup|login`,
+  `/dashboard`, `(mentor)/profile|inbox` — placeholders via one reusable
+  `Placeholder` component; `(auth)`/`(mentor)` layouts for centering/heading.
+
+**Decisions and reasoning:**
+
+- All UI is shadcn — no custom styled divs; semantic tokens only.
+- `[id]` URL segment (UUID), `PageProps<'/mentors/[id]'>` typed route props.
+- Route-group layouts can't use `LayoutProps` (no single URL path — tsc
+  error confirmed it), typed manually with `{ children }`.
+- The user's dev server on :3000 was reused for smoke tests instead of
+  killing it (my :3999 attempt was refused by Next's single-server guard).
+
+**Alternatives considered:** radix base — rejected by user (base chosen).
+Custom palette — replaced by shadcn tokens + indigo primary.
+
+**Validation:** lint clean; `tsc --noEmit` clean; `next build` succeeded (10
+routes); dev smoke test: 200 on all routes, 404 on unknown, "SkillBridge"
+renders, zero stock create-next-app content, mobile menu trigger present.
+
+**Notes for future work:** Next phase — 1.1 database setup (Postgres 17.2 is
+running in EnvKit; create `skillbridge` DB, Prisma 7 with `@prisma/adapter-pg`).

@@ -6,9 +6,9 @@ append a session log entry.
 
 **Status legend:** ⬜ pending · 🔵 in progress · ✅ done
 
-**Overall progress:** 0 / 17 build steps done (docs system complete).
+**Overall progress:** 3 / 18 build steps done (docs system complete).
 
-**Current phase:** 0 — Foundations
+**Current phase:** 1 — Data layer
 
 ---
 
@@ -16,8 +16,9 @@ append a session log entry.
 
 | Phase | Step | Status |
 |---|---|---|
-| 0 Foundations | 0.1 Design system & layout shell | ⬜ |
-| | 0.2 Routing structure | ⬜ |
+| 0 Foundations | 0.0 shadcn setup | ✅ |
+| | 0.1 Design system & layout shell | ✅ |
+| | 0.2 Routing structure | ✅ |
 | 1 Data layer | 1.1 Database setup | ⬜ |
 | | 1.2 Schema & migrations | ⬜ |
 | | 1.3 Seed data | ⬜ |
@@ -49,3 +50,22 @@ append a session log entry.
 - **Decisions:** Prisma ORM, Auth.js, roles at sign-up, CHECK-constraint
   enums, UUID PKs, RESTRICT FKs (no cascades), forward-only migrations.
 - **Next:** Step 0.1 — design system & layout shell.
+
+### 2026-08-05 — Stage 0: Foundations (shadcn)
+
+- **Done:** shadcn initialized (`base` + `nova` style, `@base-ui/react`,
+  lucide icons) with components button, badge, card, separator, sheet,
+  skeleton. Brand: indigo primary token, Geist fonts, system dark mode via
+  inline `matchMedia` script. Shell: Nav (Sheet mobile menu), Footer,
+  metadata title template, styled 404. Landing page (hero + how-it-works
+  cards). Routes: `/mentors`, `/mentors/[id]`, `/signup`, `/login`,
+  `/dashboard`, `/profile`, `/inbox` — all placeholder pages via a shared
+  `Placeholder` component; route groups `(auth)` / `(mentor)` with segment
+  layouts. Verified: lint, tsc, production build (10 routes), dev smoke test
+  (200s, 404 on unknown, no stock content). Theme tweak: `--primary` changed
+  from indigo to deep "landmark green" (#00875A / oklch 0.551 0.122 161.179,
+  AA 4.55:1; dark #00d294).
+- **Decisions:** shadcn for all UI (user directive); `[id]` UUID route
+  segment; typed `PageProps` per Next 16 convention; route-group layouts
+  typed manually (no single URL path for `LayoutProps`).
+- **Next:** Step 1.1 — database setup (Postgres via EnvKit).

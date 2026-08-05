@@ -8,7 +8,7 @@ decisions. Status is tracked in `docs/PROGRESS.md`.
 
 | # | Phase | Steps |
 |---|---|---|
-| 0 | Foundations | 0.1 Design system & layout, 0.2 Routing structure |
+| 0 | Foundations | 0.0 shadcn setup, 0.1 Design system & layout, 0.2 Routing structure |
 | 1 | Data layer | 1.1 Database setup, 1.2 Schema & migrations, 1.3 Seed data |
 | 2 | Authentication | 2.1 Auth.js setup, 2.2 Roles & guards |
 | 3 | Mentor discovery | 3.1 Directory, 3.2 Search & filter, 3.3 Mentor profile page |
@@ -133,21 +133,50 @@ dashboard), `status`.
 
 ## Phase 0 — Foundations
 
+### Step 0.0 — shadcn setup
+
+- **Objective:** shadcn/ui initialized as the single UI source for the whole app.
+- **Tasks:**
+  - `npx shadcn@latest init --base base --preset nova` → `components.json`,
+    `lib/utils.ts` (`cn()`), design tokens in `app/globals.css`
+    (`@theme inline` CSS variables), `@base-ui/react` + `lucide-react` deps.
+  - Add components: `button`, `badge`, `card`, `separator`, `sheet`,
+    `skeleton` (`npx shadcn@latest add`).
+  - Brand: `--primary` set to a deep landmark-style green (`#00875A`
+    oklch(0.551 0.122 161.179), AA 4.55:1 on white; dark mode
+    oklch(0.765 0.177 163.223)); Geist fonts wired (`--font-sans: var(--font-geist-sans)`); system dark mode via an
+    inline `matchMedia` script toggling `.dark` (no FOUC, no extra deps).
+- **Files:** `components.json`, `lib/utils.ts`, `app/globals.css`,
+  `components/ui/*`.
+- **Acceptance criteria:** `npx shadcn@latest info` lists installed
+  components; app builds with the new tokens.
+- **Decisions:** base (not radix) primitives; nova style; semantic tokens
+  only (no raw color classes); icons as lucide objects with `data-icon` slots.
+
 ### Step 0.1 — Design system & layout shell
 
 - **Objective:** Theme tokens (colors, typography via Geist), global layout
-  with navigation (logo, links, auth state) and footer.
+  with navigation (logo, links, auth state) and footer — built entirely from
+  shadcn components.
 - **Tasks:**
-  - Extend `app/globals.css` with semantic design tokens (Tailwind v4
-    `@theme`).
-  - Create `app/layout.tsx` shell: `<Nav>` + `<Footer>` components.
-  - Replace the stock landing page (`app/page.tsx`) with a simple SkillBridge
-    hero + CTA (sign up / browse mentors).
+  - `app/globals.css` holds the shadcn token system (from step 0.0); no
+    further custom palette.
+  - `components/layout/nav.tsx`: logo link, `Button` ghost links, `Sheet`
+    mobile menu (server component; Sheet is the client boundary).
+  - `components/layout/footer.tsx`: `Separator` + links.
+  - `app/layout.tsx`: metadata title template `%s | SkillBridge`, viewport
+    theme colors, dark-mode script, `<Nav>`/`<Footer>` around `<main>`.
+  - `app/page.tsx`: hero + "How it works" via `Card` composition, `Badge`
+    accents, `Button` CTAs.
+  - `app/not-found.tsx`: `Card`-based 404.
 - **Files:** `app/globals.css`, `app/layout.tsx`, `app/page.tsx`,
-  `components/nav.tsx`, `components/footer.tsx`.
+  `app/not-found.tsx`, `components/layout/nav.tsx`,
+  `components/layout/footer.tsx`.
 - **Acceptance criteria:** Landing renders with nav/footer on all viewports;
   no stock create-next-app content remains.
-- **Decisions:** Component-first layout without a UI kit; Geist fonts kept.
+- **Decisions:** All UI is shadcn (no custom styled divs); system dark mode
+  via `.dark` class toggled by an inline script; brand = deep green
+  `--primary` (#00875A, "landmark green").
 
 ### Step 0.2 — Routing structure
 
@@ -158,14 +187,18 @@ dashboard), `status`.
   - Protected (learner): `/dashboard` (my requests).
   - Protected (mentor): `/mentor/profile` (manage profile), `/mentor/inbox`.
   - Placeholder pages returning "under construction" until later steps.
-- **Files:** `app/mentors/page.tsx`, `app/mentors/[slug]/page.tsx`,
-  `app/auth/signup/page.tsx`, `app/auth/login/page.tsx`,
-  `app/dashboard/page.tsx`, `app/mentor/profile/page.tsx`,
-  `app/mentor/inbox/page.tsx`.
-- **Acceptance criteria:** All routes resolve; protected routes redirect
-  unauthenticated users once auth exists (guards wired in Phase 2).
-- **Decisions:** Mentor slug = mentor profile UUID (no fragile URL slugs);
-  role-based route groups under `(learner)` / `(mentor)` route groups.
+- **Files:** `app/mentors/page.tsx`, `app/mentors/[id]/page.tsx`,
+  `app/(auth)/signup/page.tsx`, `app/(auth)/login/page.tsx`,
+  `app/dashboard/page.tsx`, `app/(mentor)/profile/page.tsx`,
+  `app/(mentor)/inbox/page.tsx`, `app/(auth)/layout.tsx`,
+  `app/(mentor)/layout.tsx`, `components/placeholder.tsx`.
+- **Acceptance criteria:** All routes resolve (verified: 200 on each, 404 on
+  unknown); placeholders render via the shared component.
+- **Decisions:** Mentor id = UUID in the URL (`[id]`, no fragile slugs);
+  `PageProps<'/mentors/[id]'>` typed route props (Next 16 convention);
+  route-group layouts typed manually with `{ children }` (`LayoutProps`
+  only supports real URL paths); placeholders reuse one `Placeholder`
+  component (Card + Badge + Button) instead of copy-paste pages.
 
 ---
 
