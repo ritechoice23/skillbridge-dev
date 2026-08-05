@@ -66,7 +66,7 @@ public profile — not from a sign-up choice.
 | ID | As a… | I want to… | So that… |
 |---|---|---|---|
 | US-01 | user | create an account (email + password) and log in | my identity is recognised across both roles |
-| US-02 | user | create and edit a public mentor profile (headline, bio, years of experience, skills) | learners can find and evaluate me — without choosing a role at sign-up |
+| US-02 | user | create and edit a public mentor profile (bio, years of experience, skills) | learners can find and evaluate me — without choosing a role at sign-up |
 | US-03 | learner | browse the mentor directory | discover mentors |
 | US-04 | learner | search and filter mentors by skill | find mentors for the skill I want to learn |
 | US-05 | learner | view a mentor's public profile | decide whether to reach out |
@@ -90,8 +90,8 @@ public profile — not from a sign-up choice.
 
 ### 7.2 Mentor Discovery (FR-DISCOVERY)
 - FR-DISCOVERY-1: Public mentor directory listing all mentors with profiles.
-- FR-DISCOVERY-2: Search by free text (name/headline) and filter by skill.
-- FR-DISCOVERY-3: Public mentor profile page: headline, bio, years of
+- FR-DISCOVERY-2: Search by free text (name/bio) and filter by skill.
+- FR-DISCOVERY-3: Public mentor profile page: bio, years of
   experience, skills.
 
 ### 7.3 Mentorship Requests (FR-REQUEST)
@@ -105,7 +105,7 @@ public profile — not from a sign-up choice.
   status. Statuses: `pending`, `accepted`, `declined`.
 
 ### 7.4 Mentor Profile Management (FR-PROFILE)
-- FR-PROFILE-1: Any user can create a mentor profile (headline, bio, years
+- FR-PROFILE-1: Any user can create a mentor profile (bio, years
   of experience, and skills from the shared catalog), making them
   discoverable as a mentor.
 - FR-PROFILE-2: Only the owning user can edit their profile.

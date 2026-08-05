@@ -1,0 +1,78 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email         String              @unique @db.VarChar(255)
+  passwordHash  String              @map("password_hash") @db.VarChar(255)
+  name          String              @db.VarChar(100)
+  mentorProfile MentorProfile?
+  sentRequests  MentorshipRequest[] @relation("Requester")
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("users")
+}
+
+model MentorProfile {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String              @unique @map("user_id") @db.Uuid
+  user            User                @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  bio             String              @db.Text
+  experienceYears Int                 @map("experience_years")
+  skills          MentorSkill[]
+  requests        MentorshipRequest[]
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("mentor_profiles")
+}
+
+model Skill {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String           @unique @db.VarChar(80)
+  mentorSkills MentorSkill[]
+  requests     MentorshipRequest[]
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("skills")
+}
+
+model MentorSkill {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  mentorProfileId String        @map("mentor_profile_id") @db.Uuid
+  mentorProfile   MentorProfile @relation(fields: [mentorProfileId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  skillId         String        @map("skill_id") @db.Uuid
+  skill           Skill         @relation(fields: [skillId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([mentorProfileId, skillId])
+  @@index([skillId])
+  @@map("mentor_skills")
+}
+
+model MentorshipRequest {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requesterId     String         @map("requester_id") @db.Uuid
+  requester       User           @relation("Requester", fields: [requesterId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  mentorProfileId String         @map("mentor_profile_id") @db.Uuid
+  mentorProfile   MentorProfile  @relation(fields: [mentorProfileId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  skillId         String?        @map("skill_id") @db.Uuid
+  skill           Skill?         @relation(fields: [skillId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  message         String         @db.Text
+  status          String         @default("pending") @db.VarChar(20)
+  decidedAt       DateTime?      @map("decided_at") @db.Timestamptz(6)
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([mentorProfileId])
+  @@index([requesterId])
+  @@index([status])
+  @@map("mentorship_requests")
+}

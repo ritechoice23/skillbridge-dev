@@ -190,3 +190,60 @@ remaining "learner" phrasing is persona-perspective and intentional.
 **Notes for future work:** Prisma schema (Stage 1.2) must NOT include a
 `role` field; the seed script creates demo mentors by adding
 `mentor_profiles` rows, not by setting a role.
+
+## 6. Stage 1: Data layer
+
+**Trigger:** User: "lets work on stage 1" (build mode after the plan was
+approved earlier).
+
+**What was built:**
+
+- DB: `skillbridge` created on EnvKit Postgres 17.2; `.env` with
+  `DATABASE_URL` (gitignored).
+- Prisma 7.9.1 stack: `@prisma/client`, `@prisma/adapter-pg`, `pg`,
+  `bcryptjs`; dev `tsx`, `dotenv`. `prisma.config.ts` (dotenv + seed wiring).
+- `prisma/schema.prisma`: 5 models — `User` (no role!), `MentorProfile`,
+  `Skill`, `MentorSkill`, `MentorshipRequest` — UUID PKs via
+  `gen_random_uuid()`, every FK `onDelete: Restrict, onUpdate: NoAction`,
+  snake_case via `@map`, CHECKs added to the migration.
+- Migration `20260805112321_init`: created with `--create-only`, then CHECKs
+  appended, then applied (forward-only, immutable).
+- `lib/db.ts` PrismaClient singleton with PrismaPg adapter; generated client
+  output to `lib/generated/prisma` (gitignored), `postinstall: prisma
+  generate`; `serverExternalPackages: ["pg"]`.
+- Seed: 12 skills + 4 demo mentors (bcrypt `password123`), idempotent
+  (verified twice), mentor_skills replaced explicitly inside one transaction.
+
+**Decisions and reasoning:**
+
+- **`onUpdate: NoAction` declared in the schema**: Prisma generates
+  `ON UPDATE CASCADE` by default on every FK — the global no-cascades rule
+  forbids cascading updates, so every relation explicitly sets
+  `onUpdate: NoAction` (schema-declared, so no migration drift).
+- CHECK constraints (status, experience_years) live in the initial
+  migration SQL — Prisma has no CHECK support, and this keeps enums out of
+  PG enum types (forward-only friendly).
+- Generated client is gitignored + regenerated on install (Prisma 7
+  `prisma-client` generator outputs TS source; committing was optional).
+
+**Alternatives considered:** Hand-editing `ON UPDATE CASCADE` → NO ACTION in
+the migration SQL — rejected: schema-declared `onUpdate: NoAction` is
+drift-proof and self-documenting.
+
+**Validation:** `migrate status` clean; live schema inspected via
+information_schema — 6 FKs all `DELETE RESTRICT`/`UPDATE NO ACTION`, both
+CHECKs, UUID defaults, all indexes; raw-SQL demos: DELETE of a referenced
+skill → 23503 (RESTRICT works), invalid status → 23514 (CHECK works), valid
+insert accepted; seed ran twice with identical counts; lint + tsc + build
+clean.
+
+**Notes for future work:** Phase 2 (Auth.js) — sign-up must NOT collect a
+role; mentor guards check `mentor_profiles` existence. Demo credentials:
+`priya@example.com` etc. / `password123`.
+
+**Amendment (same day, post-build):** `headline` removed from
+`mentor_profiles` at the user's request. Schema + seed updated; column
+dropped via a new forward-only migration `20260805123000_drop_mentor_profile_headline`
+(`migrate dev` refused to run non-interactively on the data-loss warning, so
+the drop SQL was hand-written and applied with `migrate deploy`). PRD/BUILD_PLAN
+synchronized. Mentor profile now = bio + experience_years + skills.

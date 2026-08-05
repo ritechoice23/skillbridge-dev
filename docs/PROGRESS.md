@@ -6,9 +6,9 @@ append a session log entry.
 
 **Status legend:** ⬜ pending · 🔵 in progress · ✅ done
 
-**Overall progress:** 3 / 18 build steps done (docs system complete).
+**Overall progress:** 6 / 18 build steps done (docs system complete).
 
-**Current phase:** 1 — Data layer
+**Current phase:** 2 — Authentication
 
 ---
 
@@ -19,9 +19,9 @@ append a session log entry.
 | 0 Foundations | 0.0 shadcn setup | ✅ |
 | | 0.1 Design system & layout shell | ✅ |
 | | 0.2 Routing structure | ✅ |
-| 1 Data layer | 1.1 Database setup | ⬜ |
-| | 1.2 Schema & migrations | ⬜ |
-| | 1.3 Seed data | ⬜ |
+| 1 Data layer | 1.1 Database setup | ✅ |
+| | 1.2 Schema & migrations | ✅ |
+| | 1.3 Seed data | ✅ |
 | 2 Authentication | 2.1 Auth.js setup | ⬜ |
 | | 2.2 Guards | ⬜ |
 | 3 Mentor discovery | 3.1 Mentor directory | ⬜ |
@@ -71,6 +71,34 @@ append a session log entry.
   segment; typed `PageProps` per Next 16 convention; route-group layouts
   typed manually (no single URL path for `LayoutProps`).
 - **Next:** Step 1.1 — database setup (Postgres via EnvKit).
+
+### 2026-08-05 — Stage 1: Data layer
+
+- **Done:** `skillbridge` DB created on Postgres 17.2 (EnvKit); `.env` with
+  `DATABASE_URL`. Prisma 7.9.1 + `@prisma/adapter-pg` + `pg` + `bcryptjs`
+  (+ dev: `tsx`, `dotenv`). `prisma.config.ts` (dotenv, seed command),
+  `prisma/schema.prisma` — 5 models, UUID PKs (`gen_random_uuid()`),
+  `onDelete: Restrict` + `onUpdate: NoAction` on all 6 FKs (no cascades),
+  no role column. Migration `20260805112321_init` created with `--create-only`,
+  CHECKs appended (request status, experience_years ≥ 0), applied forward-only.
+  `lib/db.ts` singleton (PrismaPg adapter, dev hot-reload safe).
+  `next.config.ts` → `serverExternalPackages: ["pg"]`; `.gitignore` excludes
+  `lib/generated/`; `postinstall: prisma generate`. Seed: 12 skills, 4 demo
+  mentors (bcrypt `password123`), idempotent (ran twice, identical counts),
+  mentor_skills replaced explicitly in a transaction.
+- **Verified:** `migrate status` up-to-date; live schema inspected — UUID
+  defaults, DELETE RESTRICT + UPDATE NO ACTION on every FK, CHECKs present,
+  all indexes; raw-SQL FK-restrict demo (23503) and status-CHECK demo (23514);
+  lint, tsc, build clean.
+- **Decisions:** Prisma's default `ON UPDATE CASCADE` overridden in the
+  schema with `onUpdate: NoAction` (global no-cascades rule); enums as
+  CHECKs appended to the initial migration (forward-only); generated client
+  gitignored + regenerated via postinstall.
+- **Next:** Step 2.1 — Auth.js setup.
+
+*Follow-up same day: `mentor_profiles.headline` dropped (user request) via
+migration `20260805123000_drop_mentor_profile_headline`; seed, PRD and
+BUILD_PLAN synchronized; lint/tsc/build re-verified clean.*
 
 ### 2026-08-05 — Role model pivot: no fixed roles
 

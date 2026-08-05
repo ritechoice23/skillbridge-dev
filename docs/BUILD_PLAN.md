@@ -59,8 +59,7 @@ Indexes: unique on `email`.
 | Column | Type | Constraints |
 |---|---|---|
 | id | uuid | PK, default `gen_random_uuid()` |
-| user_id | uuid | NOT NULL, UNIQUE, FK → users(id) ON DELETE RESTRICT |
-| headline | varchar(120) | NOT NULL |
+| user_id | uuid | NOT NULL, UNIQUE, FK → users(id) ON DELETE RESTRICT ON UPDATE NO ACTION |
 | bio | text | NOT NULL |
 | experience_years | int | NOT NULL, CHECK (>= 0) |
 | created_at | timestamptz | NOT NULL, default now() |
@@ -83,8 +82,8 @@ Indexes: unique on `name`.
 | Column | Type | Constraints |
 |---|---|---|
 | id | uuid | PK, default `gen_random_uuid()` |
-| mentor_profile_id | uuid | NOT NULL, FK → mentor_profiles(id) ON DELETE RESTRICT |
-| skill_id | uuid | NOT NULL, FK → skills(id) ON DELETE RESTRICT |
+| mentor_profile_id | uuid | NOT NULL, FK → mentor_profiles(id) ON DELETE RESTRICT ON UPDATE NO ACTION |
+| skill_id | uuid | NOT NULL, FK → skills(id) ON DELETE RESTRICT ON UPDATE NO ACTION |
 | created_at | timestamptz | NOT NULL, default now() |
 
 Indexes: unique on `(mentor_profile_id, skill_id)`; index on `skill_id`
@@ -95,9 +94,9 @@ Indexes: unique on `(mentor_profile_id, skill_id)`; index on `skill_id`
 | Column | Type | Constraints |
 |---|---|---|
 | id | uuid | PK, default `gen_random_uuid()` |
-| requester_id | uuid | NOT NULL, FK → users(id) ON DELETE RESTRICT |
-| mentor_profile_id | uuid | NOT NULL, FK → mentor_profiles(id) ON DELETE RESTRICT |
-| skill_id | uuid | NULL, FK → skills(id) ON DELETE RESTRICT |
+| requester_id | uuid | NOT NULL, FK → users(id) ON DELETE RESTRICT ON UPDATE NO ACTION |
+| mentor_profile_id | uuid | NOT NULL, FK → mentor_profiles(id) ON DELETE RESTRICT ON UPDATE NO ACTION |
+| skill_id | uuid | NULL, FK → skills(id) ON DELETE RESTRICT ON UPDATE NO ACTION |
 | message | text | NOT NULL |
 | status | varchar(20) | NOT NULL, default `'pending'`, CHECK in (`pending`,`accepted`,`declined`) |
 | decided_at | timestamptz | NULL |
@@ -214,10 +213,13 @@ dashboard), `status`.
 
 - **Objective:** Local PostgreSQL running and reachable from the app.
 - **Tasks:**
-  - Start Postgres via EnvKit and create the `skillbridge` database.
-  - Add `DATABASE_URL` to `.env` / `.env.local`.
-- **Files:** `.env.local` (never committed).
-- **Acceptance criteria:** `psql` connection works; app can connect.
+  - Created the `skillbridge` database on the EnvKit Postgres 17.2 instance
+    (127.0.0.1:5432, user `postgres`).
+  - Added `DATABASE_URL=postgresql://postgres@127.0.0.1:5432/skillbridge` to
+    `.env` (gitignored; loaded by Next and by Prisma CLI via
+    `prisma.config.ts` + dotenv).
+- **Files:** `.env` (never committed).
+- **Acceptance criteria:** DB visible in EnvKit overview; Prisma connects.
 - **Decisions:** Local dev DB only for MVP; no cascade/production topology yet.
 
 ### Step 1.2 — Schema & migrations
@@ -225,31 +227,53 @@ dashboard), `status`.
 - **Objective:** Tables from the Database Design above, created through
   forward-only migrations.
 - **Tasks:**
-  - Install Prisma (`prisma` + `@prisma/client`); configure for PostgreSQL
-    and UUIDs (`@db.Uuid` / `dbgenerated("gen_random_uuid()")`).
-  - Define models: `User`, `MentorProfile`, `Skill`, `MentorSkill`,
-    `MentorshipRequest` — matching the design exactly (UUID PKs, RESTRICT
-    FKs, CHECKs, indexes).
-  - Generate and run the initial migration (forward-only; never re-edit it).
-  - Create `lib/prisma.ts` singleton client.
-- **Files:** `prisma/schema.prisma`,
-  `prisma/migrations/0000_init/migration.sql`, `lib/prisma.ts`.
-- **Acceptance criteria:** `migrate dev` applies cleanly; tables/constraints
-  match the design (verified via `psql \d`).
-- **Decisions:** Prisma; UUID via `gen_random_uuid()`; CHECK constraints for
-  enums; `RESTRICT` on all FKs — no cascades.
+  - Installed Prisma 7.9.1 (`prisma` + `@prisma/client`) with the required
+    driver adapter `@prisma/adapter-pg` + `pg`; dev deps `tsx`, `dotenv`.
+  - `prisma.config.ts`: `defineConfig` with `datasource.url` from
+    `env("DATABASE_URL")` and `migrations.seed` (`tsx prisma/seed.ts`).
+  - `prisma/schema.prisma`: `prisma-client` generator, output
+    `lib/generated/prisma`; 5 models matching the design exactly — UUID PKs
+    via `dbgenerated("gen_random_uuid()")`, `@db.Uuid` FKs,
+    `onDelete: Restrict` **and `onUpdate: NoAction`** on every relation,
+    `@db.Timestamptz(6)` timestamps, `@map`/`@@map` snake_case columns.
+    No `role` field (see role-model decision).
+  - Migration created with `migrate dev --create-only --name init`, CHECK
+    constraints appended to the SQL (`status IN (...)` on requests,
+    `experience_years >= 0` on profiles), then applied. Migration is
+    immutable going forward.
+  - `lib/db.ts`: singleton `PrismaClient` with `PrismaPg` adapter
+    (`globalThis` caching in dev).
+  - `next.config.ts`: `serverExternalPackages: ["pg"]`; `.gitignore` excludes
+    `lib/generated/`; `postinstall: prisma generate`.
+- **Files:** `prisma.config.ts`, `prisma/schema.prisma`,
+  `prisma/migrations/20260805112321_init/migration.sql`, `lib/db.ts`,
+  `lib/generated/prisma` (gitignored), `next.config.ts`, `.gitignore`.
+- **Acceptance criteria:** `migrate status` up-to-date; live schema verified
+  via information_schema — UUID defaults, `ON DELETE RESTRICT ON UPDATE NO ACTION` + `ON UPDATE
+  NO ACTION` on all 6 FKs, both CHECKs, all indexes present; raw-SQL tests:
+  deleting a referenced skill fails (23503), invalid status fails (23514).
+- **Decisions:** Prisma 7 (driver adapter mandatory, generated TS client);
+  Prisma's default `ON UPDATE CASCADE` is overridden with
+  `onUpdate: NoAction` in the schema to honor the no-cascades rule; enums as
+  CHECKs in the initial migration (no PG enum types); generated client
+  gitignored, regenerated on `postinstall`.
 
 ### Step 1.3 — Seed data
 
 - **Objective:** A skill catalog and a few demo mentors.
 - **Tasks:**
-  - `prisma/seed.ts`: ~12 practical skills; 3–5 demo mentor users with
-    profiles and mentor_skills (dev only).
-  - NPM script `db:seed`.
-- **Files:** `prisma/seed.ts`, `package.json`.
-- **Acceptance criteria:** Seeding is idempotent (re-runnable); demo mentors
-  visible after seed.
-- **Decisions:** Seed only dev/test; no production seeding.
+  - `prisma/seed.ts`: 12 practical skills; 4 demo mentor users (bcrypt-hashed
+    `password123`, email `*.example.com`) with profiles and `mentor_skills`.
+  - Idempotent and transactional: upserts by email/name; `mentor_skills`
+    replaced via explicit `deleteMany` + `createMany` inside one
+    `$transaction` (no cascades).
+  - `npm run db:seed` → `prisma db seed` (wired via `prisma.config.ts`).
+- **Files:** `prisma/seed.ts`, `package.json` (`db:seed`, `postinstall`).
+- **Acceptance criteria:** Seeding is idempotent (ran twice — identical
+  counts: 4 users, 4 profiles, 12 skills, 9 mentor_skills); demo mentors
+  queryable.
+- **Decisions:** Seed only dev/test; no production seeding; `bcryptjs`
+  pulled forward from Phase 2; `tsx` runs the seed.
 
 ---
 
@@ -306,14 +330,14 @@ dashboard), `status`.
 - **Tasks:**
   - Server component query: mentors + profile + skills (eager loading, no
     N+1).
-  - Mentor cards: name, headline, experience, skills.
+  - Mentor cards: name, bio, experience, skills.
 - **Files:** `app/mentors/page.tsx`, `components/mentor-card.tsx`.
 - **Acceptance criteria:** all seeded mentors listed; empty state when none.
 - **Decisions:** Server-rendered; pagination deferred (MVP scale).
 
 ### Step 3.2 — Search & filter
 
-- **Objective:** Filter by skill; search by name/headline.
+- **Objective:** Filter by skill; search by name/bio.
 - **Tasks:**
   - URL-driven filters (`?skill=` query param); search input.
   - Queries use `mentor_skills` join + index; ILIKE for search.
@@ -327,7 +351,7 @@ dashboard), `status`.
 
 - **Objective:** Public `/mentors/[id]` showing full profile + request CTA.
 - **Tasks:**
-  - Query profile by UUID; show headline, bio, experience, skills.
+  - Query profile by UUID; show bio, experience, skills.
   - CTA button → request form (Phase 4) if logged in, else login prompt.
 - **Files:** `app/mentors/[slug]/page.tsx` (rename to `[id]`),
   `components/request-cta.tsx`.
@@ -389,7 +413,7 @@ dashboard), `status`.
   - `UpsertMentorProfile` Action: transaction creating/updating profile and
     replacing `mentor_skills` (explicit delete of old rows, then insert —
     no cascade).
-  - Profile form: headline, bio, experience years, multi-select skills
+  - Profile form: bio, experience years, multi-select skills
     (from catalog); ownership enforced.
 - **Files:** `app/mentor/profile/page.tsx`, `components/mentor-profile-form.tsx`,
   `lib/actions/profiles.ts`.
