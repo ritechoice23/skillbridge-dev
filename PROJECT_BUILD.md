@@ -64,3 +64,43 @@ to `AGENTS.md` and `README.md`.
 
 **Notes for future work:** Every future session that changes the project
 should append an entry here.
+
+## 3. PRD, build plan, and progress tracker
+
+**Trigger:** User request to document the PRD in `docs/` and create a
+step-by-step build plan plus a tracking file.
+
+**What was built:**
+
+- `docs/PRD.md` — full product requirements document for SkillBridge
+  (learners discover mentors for practical skills and send mentorship
+  requests; real mentor accounts; in-app inbox; PostgreSQL).
+- `docs/BUILD_PLAN.md` — 6-phase, 17-step build plan with objective, tasks,
+  files, acceptance criteria, and decisions per step, plus the complete
+  database design.
+- `docs/PROGRESS.md` — status tracker with step table and session log.
+- `AGENTS.md` — new "Project Docs System" section (maintain PRD, build plan,
+  tracker; docs follow global database principles).
+- `.agent/prompts/logs/2026-08-05.md` — prompt log (logging enabled).
+
+**Decisions and reasoning:**
+
+- Product scope (via user Q&A): MVP = mentor discovery + mentorship
+  requests; mentors have real accounts; requests stored in-app; PostgreSQL.
+- Stack defaults approved: Prisma ORM, Auth.js, roles chosen at sign-up,
+  Zod validation.
+- Database follows the global principles: UUID PKs on all application-owned
+  tables, restrictive FKs (`ON DELETE RESTRICT`, no cascades), CHECK-based
+  enums (forward-only friendly), forward-only migrations, cleanup through
+  explicit Actions.
+- Mentor slug = UUID (no fragile URL slugs).
+
+**Alternatives considered:** Mentor-seeded (no auth) MVP — rejected: user
+wants real mentor accounts. Email delivery of requests — rejected: in-app
+inbox chosen. Auto-increment IDs / cascade FKs — rejected per global rules.
+
+**Constraints:** docs must stay in sync with the actual build; tracker
+updated every session.
+
+**Notes for future work:** Phase 0 (design system + routing) is next;
+`.agent/prompts/logs/` now records prompts daily since logging is enabled.
