@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { ArrowRightIcon, SearchIcon, SendIcon, SparklesIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { LinkButton } from "@/components/link-button";
 import {
   Card,
   CardContent,
@@ -46,17 +45,13 @@ export default function HomePage() {
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
-          <Button size="lg" render={<Link href="/mentors" />}>
+          <LinkButton size="lg" href="/mentors">
             Find a mentor
             <ArrowRightIcon data-icon="inline-end" />
-          </Button>
-          <Button
-            size="lg"
-            variant="outline"
-            render={<Link href="/auth/signup" />}
-          >
+          </LinkButton>
+          <LinkButton size="lg" variant="outline" href="/signup">
             Become a mentor
-          </Button>
+          </LinkButton>
         </div>
       </section>
 

@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { LinkButton } from "@/components/link-button";
 import {
   Card,
   CardContent,
@@ -18,7 +17,7 @@ export default function NotFound() {
           <p className="text-muted-foreground">
             The page you are looking for does not exist or has moved.
           </p>
-          <Button render={<Link href="/" />}>Back home</Button>
+          <LinkButton href="/">Back home</LinkButton>
         </CardContent>
       </Card>
     </section>

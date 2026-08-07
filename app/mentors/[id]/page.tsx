@@ -1,20 +1,91 @@
 import type { Metadata } from "next";
-import { Placeholder } from "@/components/placeholder";
+import { notFound } from "next/navigation";
+import { ArrowLeftIcon } from "lucide-react";
+import { prisma } from "@/lib/db";
+import { Badge } from "@/components/ui/badge";
+import { LinkButton } from "@/components/link-button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+} from "@/components/ui/card";
+import { RequestCta } from "@/components/request-cta";
 
 export const metadata: Metadata = {
   title: "Mentor Profile",
 };
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export default async function MentorProfilePage({
   params,
 }: PageProps<"/mentors/[id]">) {
   const { id } = await params;
+  if (!UUID_RE.test(id)) {
+    notFound();
+  }
+
+  const profile = await prisma.mentorProfile.findUnique({
+    where: { id },
+    include: {
+      user: { select: { name: true } },
+      skills: { include: { skill: { select: { name: true } } } },
+    },
+  });
+  if (!profile) {
+    notFound();
+  }
+
+  const years =
+    profile.experienceYears === 1
+      ? "1 year"
+      : `${profile.experienceYears} years`;
 
   return (
-    <Placeholder
-      title="Mentor Profile"
-      description={`Profile for mentor ${id}.`}
-      planned={["Bio and experience", "Offered skills", "Send a mentorship request"]}
-    />
+    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 px-4 py-10">
+      <LinkButton
+        variant="ghost"
+        size="sm"
+        className="w-fit"
+        href="/mentors"
+      >
+        <ArrowLeftIcon />
+        All mentors
+      </LinkButton>
+
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-1">
+            <h1 className="font-heading text-2xl font-semibold tracking-tight">
+              {profile.user.name}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {years} of experience
+            </p>
+          </div>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-5">
+          <div className="flex flex-col gap-1.5">
+            <h2 className="font-heading text-sm font-medium">About</h2>
+            <p className="text-muted-foreground">{profile.bio}</p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <h2 className="font-heading text-sm font-medium">
+              Skills they can mentor you in
+            </h2>
+            <div className="flex flex-wrap gap-1.5">
+              {profile.skills.map(({ skill }) => (
+                <Badge key={skill.name} variant="outline">
+                  {skill.name}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <RequestCta />
+    </div>
   );
 }

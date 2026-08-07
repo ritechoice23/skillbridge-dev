@@ -391,31 +391,41 @@ dashboard), `status`.
 - **Tasks:**
   - `proxy.ts` (Next 16 middleware replacement): optimistic cookie pre-check
     — protected routes (`/dashboard`, `/inbox`, `/profile`) redirect to
-    `/login`; auth routes (`/login`, `/signup`) redirect signed-in users to
-    `/dashboard`; static/API paths excluded via `config.matcher`.
+    `/login`; static/API paths excluded via `config.matcher`. Auth routes
+    are **not** proxied — signed-in redirects from `/login`/`/signup` live
+    in the `(auth)` layout where the session is DB-validated (a cookie
+    alone would loop `/dashboard` ↔ `/login` forever when its `sessions`
+    row is gone).
   - `lib/auth/dal.ts`: `getSession()` (React cache), `requireUser()`
     (redirect `/login`), `requireMentorProfile()` (redirect
     `/profile?setup=1`).
   - Layout guards: `/dashboard` layout and `(mentor)` layout call
     `requireUser`; `/inbox` additionally `requireMentorProfile` — mentor
-    status is derived from owning a `mentor_profiles` row, never a role flag.
+    status is derived from owning a `mentor_profiles` row, never a role flag;
+    `(auth)` layout redirects valid sessions to `/dashboard`.
   - Ownership checks: profile editing and inbox actions verify
     `mentor_profile.user_id === user.id` (Phase 5).
   - Session-aware `components/layout/nav.tsx`: signed-in name + sign-out
     form vs Sign in / Get started links.
 - **Files:** `proxy.ts`, `lib/auth/dal.ts`, `app/dashboard/layout.tsx`,
   `app/(mentor)/layout.tsx`, `app/(mentor)/inbox/page.tsx`,
-  `components/layout/nav.tsx`.
+  `app/(auth)/layout.tsx`, `components/layout/nav.tsx`.
 - **Acceptance criteria:** unauthenticated `/dashboard` → `/login`
-  (verified); signed-in `/login` → `/dashboard` (verified); a user without a
-  mentor profile cannot open `/inbox` and is guided to
-  `/profile?setup=1`; nobody can edit another user's profile; a mentor can
-  still send requests as a learner (both roles, one account).
+  (verified); signed-in `/login` → `/dashboard` (verified, DB-validated);
+  a stale cookie terminates at the login form instead of looping (verified
+  live after a regression — see below); a user without a mentor profile
+  cannot open `/inbox` and is guided to `/profile?setup=1`; nobody can edit
+  another user's profile; a mentor can still send requests as a learner
+  (both roles, one account).
 - **Decisions:** Server-side guards in layouts/server components — no
   client-only gating (security); proxy redirects are optimistic pre-checks,
-  real enforcement lives in the DAL; "is a mentor" is derived from profile
-  existence, never a role flag; mutating API endpoints enforce CSRF via the
-  `Origin` header (Better Auth).
+  real enforcement lives in the DAL; **auth-route redirects must be
+  DB-validated** (proxy cookie checks on `/login`/`/signup` caused an
+  infinite `/dashboard` ↔ `/login` redirect loop for stale/revoked
+  sessions — fixed by moving that redirect to the `(auth)` layout);
+  "is a mentor" is derived from profile existence, never a role flag;
+  mutating API endpoints enforce CSRF via the `Origin` header (Better
+  Auth).
 
 ---
 
@@ -425,35 +435,60 @@ dashboard), `status`.
 
 - **Objective:** Public `/mentors` listing all mentors with profiles.
 - **Tasks:**
-  - Server component query: mentors + profile + skills (eager loading, no
-    N+1).
-  - Mentor cards: name, bio, experience, skills.
+  - Server component query: mentors + user name + skills, eager-loaded via
+    one `include` (no N+1); skill catalog fetched in parallel
+    (`Promise.all`) for the filter options.
+  - `MentorCard`: name, experience badge (singular/plural years), bio
+    (3-line clamp), skill badges, "View profile" link button.
+  - Grid layout (1/2/3 columns responsive); dashed empty state with a
+    "Clear filters" action when filters are active.
 - **Files:** `app/mentors/page.tsx`, `components/mentor-card.tsx`.
-- **Acceptance criteria:** all seeded mentors listed; empty state when none.
-- **Decisions:** Server-rendered; pagination deferred (MVP scale).
+- **Acceptance criteria:** all seeded mentors listed; empty state when none
+  (both verified live).
+- **Decisions:** Server-rendered; pagination deferred (MVP scale); card
+  props typed as `Prisma.MentorProfileGetPayload<…>` — one shared
+  `MentorWithRelations` type, no hand-written data shapes.
 
 ### Step 3.2 — Search & filter
 
-- **Objective:** Filter by skill; search by name/bio.
+- **Objective:** Filter by skill; search by name/bio — all URL-driven.
 - **Tasks:**
-  - URL-driven filters (`?skill=` query param); search input.
-  - Queries use `mentor_skills` join + index; ILIKE for search.
+  - A **GET form** (`action="/mentors" method="get"`) with a search input
+    (`q`) and a shadcn `select` (`skill`, base-ui popup select whose hidden
+    form input carries the value via the `name` prop).
+  - Queries: skill filter joins through `mentor_skills`
+    (`skills: { some: { skill: { name: { equals, mode: "insensitive" } } } }`);
+    search is `contains` (ILIKE) `OR` on user name and bio. Skill filtering
+    matches the skill **name** (case-insensitive), not the UUID.
+  - "Clear" link resets to `/mentors`; search params normalize
+    `string | string[] | undefined` → trimmed string.
 - **Files:** `app/mentors/page.tsx`, `components/mentor-filters.tsx`.
 - **Acceptance criteria:** filtering by skill returns only matching mentors;
-  search narrows results; state survives reload (URL-driven).
-- **Decisions:** URL query params over client state; debounce not needed for
-  server rendering.
+  search narrows results; state survives reload (URL-driven) — all verified
+  live (`?skill=Data Analysis` → only Amara; `?q=priya` → only Priya;
+  combined no-match → empty state).
+- **Decisions:** URL query params over client state — zero client JS needed
+  (progressive enhancement); debounce not needed for server rendering;
+  select options come from the live skill catalog.
 
 ### Step 3.3 — Mentor profile page
 
 - **Objective:** Public `/mentors/[id]` showing full profile + request CTA.
 - **Tasks:**
-  - Query profile by UUID; show bio, experience, skills.
-  - CTA button → request form (Phase 4) if logged in, else login prompt.
-- **Files:** `app/mentors/[slug]/page.tsx` (rename to `[id]`),
-  `components/request-cta.tsx`.
-- **Acceptance criteria:** profile renders; unknown id → 404.
-- **Decisions:** UUID in URL; server-side 404 for unknown/void ids.
+  - UUID format pre-check before the Prisma query (malformed id → `notFound()`
+    without touching the DB); `notFound()` for unknown ids.
+  - Query profile by UUID with eager-loaded user name + skills; render name,
+    experience (years), bio ("About"), skill badges, back link.
+  - `RequestCta`: session-aware — anonymous users get "Sign in to request
+    mentorship" (+ sign-up link); signed-in users get a disabled button with
+    a note (wired in Phase 4).
+- **Files:** `app/mentors/[id]/page.tsx`, `components/request-cta.tsx`.
+- **Acceptance criteria:** profile renders (name, years, bio, skills —
+  verified live); unknown/void id → 404 (verified: bad format and random
+  UUID both 404).
+- **Decisions:** UUID in URL; server-side 404 for unknown/void ids; the CTA
+  is an honest placeholder (disabled button + note) until Phase 4 ships the
+  request form — no dead-end "send" button that fails.
 
 ---
 

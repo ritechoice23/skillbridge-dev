@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { HandshakeIcon, MenuIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LinkButton } from "@/components/link-button";
 import {
   Sheet,
   SheetContent,
@@ -41,9 +42,9 @@ export async function Nav() {
 
         <div className="hidden items-center gap-1 sm:flex">
           {primaryLinks.map((link) => (
-            <Button key={link.href} variant="ghost" render={<Link href={link.href} />}>
+            <LinkButton key={link.href} href={link.href} variant="ghost">
               {link.label}
-            </Button>
+            </LinkButton>
           ))}
         </div>
 
@@ -60,10 +61,10 @@ export async function Nav() {
           </div>
         ) : (
           <div className="hidden items-center gap-2 sm:flex">
-            <Button variant="ghost" render={<Link href="/login" />}>
+            <LinkButton href="/login" variant="ghost">
               Sign in
-            </Button>
-            <Button render={<Link href="/signup" />}>Get started</Button>
+            </LinkButton>
+            <LinkButton href="/signup">Get started</LinkButton>
           </div>
         )}
 
@@ -82,14 +83,14 @@ export async function Nav() {
               </SheetHeader>
               <div className="flex flex-col gap-1 p-4">
                 {mobileLinks.map((link) => (
-                  <Button
+                  <LinkButton
                     key={link.href}
+                    href={link.href}
                     variant="ghost"
                     className="justify-start"
-                    render={<Link href={link.href} />}
                   >
                     {link.label}
-                  </Button>
+                  </LinkButton>
                 ))}
                 {user ? (
                   <form action={signOut}>

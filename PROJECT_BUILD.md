@@ -323,3 +323,104 @@ implementation is now captured as a technical reference in `docs/AUTH.md`
 (architecture diagram, per-file walkthrough with file:line references,
 cookie mechanics, verified flow table, configuration, testing recipes).
 BUILD_PLAN step 2.1 points to it.
+
+## 8. Stage 3: Mentor discovery
+
+**Trigger:** "move to the next stage of building" — Phase 3 (directory,
+search & filter, profile page).
+
+**What was built:**
+
+- `app/mentors/page.tsx`: eager-loaded query (profile + user name + skills
+  in one `include`; skill catalog fetched in parallel via `Promise.all`),
+  URL-driven filters from `searchParams` (normalized `string |
+  string[] | undefined` → trimmed string), responsive card grid, dashed
+  empty state with "Clear filters".
+- `components/mentor-card.tsx`: `MentorWithRelations` payload type via
+  `Prisma.MentorProfileGetPayload<…>`; card = name, experience badge
+  (singular/plural), 3-line clamped bio, skill badges, view-profile link.
+- `components/mentor-filters.tsx`: **GET form** (no client JS) — search
+  input `q` + shadcn `select` `skill` (base-ui popup; the hidden form input
+  is driven by the `name` prop; "All skills" sentinel value `all`).
+- Query semantics: skill filter = `skills: { some: { skill: { name: {
+  equals, mode: "insensitive" } } } }` (by **name**, not UUID); search =
+  `contains` (ILIKE) OR on `user.name` and `bio`.
+- `app/mentors/[id]/page.tsx`: UUID-format regex pre-check → `notFound()`
+  without touching the DB; profile card (name, years, About, skill badges),
+  back link; unknown id → `notFound()`.
+- `components/request-cta.tsx`: session-aware CTA — anonymous → "Sign in to
+  request mentorship" (+ sign-up link); signed-in → **disabled** button +
+  note (honest placeholder until Phase 4).
+- shadcn `select` component added (base-ui variant).
+- Fixed a stale `/auth/signup` link on the landing page (`app/page.tsx`).
+
+**Decisions and reasoning:**
+
+- **URL params over client state**: GET form + server rendering = filters
+  survive reload/share as links, zero JS required, no debounce.
+- **Skill by name**: human-readable URLs (`?skill=Data%20Analysis`), names
+  are unique; case-insensitive to forgive capitalization.
+- **Shared payload type** instead of duplicating query shapes.
+- **UUID pre-check before Prisma**: malformed ids 404 cleanly instead of
+  throwing a DB cast error.
+- **CTA as disabled placeholder**: better an honest "coming soon" than a
+  button that fails; Phase 4 replaces it.
+
+**Alternatives considered:** client-side filter state (rejected: lost on
+reload, more JS); radix/native select (base-ui select is the shadcn-native
+path with built-in form integration).
+
+**Validation:** lint + build + tsc clean. Live smoke on throwaway `next
+start -p 3100` (user's dev server on :3000 untouched): all 4 mentors
+render; `?skill=Data Analysis` → only Amara; `?q=priya` → only Priya;
+combined no-match → empty state; malformed + random UUID → 404; Priya's
+profile renders name/9 years/bio/skills; anon CTA shows login/signup links
+(note: first test used `user_id` instead of profile `id` — the directory
+links to `mentor_profiles.id`, which is not the user's id); authed CTA
+(priya sign-in) shows the disabled button. Test server killed, sessions
+cleaned, artifacts removed.
+
+**Notes for future work:** Phase 4 wires the request form onto the profile
+page (replacing the disabled button); the request CTA currently has no
+`returnTo` behavior — decide whether login should redirect back to the
+mentor profile.
+
+## 9. Regression fix: stale-session redirect loop
+
+**Trigger:** User reported `/dashboard` causing an infinite operation that
+crashed the browser ("its the authentication process or the check of it").
+
+**Root cause:** A two-layer disagreement. The proxy redirected auth routes
+(`/login`, `/signup`) to `/dashboard` based on cookie **presence**, while
+the DAL's `requireUser` (DB-validated) redirected `/dashboard` to `/login`
+when the `sessions` row was missing. With a stale cookie (session row
+expired, revoked, or deleted) the result was an infinite
+`/dashboard` ↔ `/login` 307 storm. Trigger in this case: the user's own
+session row had been removed during earlier test cleanup (`DELETE FROM
+sessions`) while the cookie stayed in the browser.
+
+**Fix:**
+
+- `proxy.ts`: removed the auth-route redirect entirely — the proxy now only
+  does the optimistic no-cookie → `/login` pre-check on protected routes.
+- `app/(auth)/layout.tsx`: now calls `getSession()` and redirects valid
+  sessions to `/dashboard` — the signed-in behavior is preserved but
+  DB-validated (one deduped query via React `cache()`).
+
+**Why this is correct:** a stale cookie can no longer bounce between
+layers — `/login` always renders when there is no valid DB session, letting
+the user sign in again (which replaces the cookie). The proxy keeps its
+fast path for logged-out users; it never grants access by itself.
+
+**Validation:** live reproduction on a throwaway `next start -p 3100`:
+stale cookie → `/dashboard` → 307 `/login` → form renders 200 (chain
+terminates with `--max-redirs 5`); stale cookie on `/login` → 200 form;
+valid session → `/login` and `/signup` → 307 `/dashboard`; `/dashboard`
+→ 200. lint + tsc + build clean. Note: `next start` serves the **last
+build** — proxy/layout changes require `npm run build` before testing
+(missed once during verification; rebuilt and retested).
+
+**Notes for future work:** any cookie-based redirect on auth routes must
+stay DB-validated; if an edge-side check is ever needed, sign the session
+claim or use a short-TTL cached validation — do not trust cookie presence
+alone for redirect decisions.

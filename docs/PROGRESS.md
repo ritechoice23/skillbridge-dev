@@ -6,9 +6,9 @@ append a session log entry.
 
 **Status legend:** ⬜ pending · 🔵 in progress · ✅ done
 
-**Overall progress:** 8 / 18 build steps done (docs system complete).
+**Overall progress:** 11 / 18 build steps done (docs system complete).
 
-**Current phase:** 3 — Mentor discovery
+**Current phase:** 4 — Requests
 
 ---
 
@@ -24,9 +24,9 @@ append a session log entry.
 | | 1.3 Seed data | ✅ |
 | 2 Authentication | 2.1 Better Auth setup | ✅ |
 | | 2.2 Guards | ✅ |
-| 3 Mentor discovery | 3.1 Mentor directory | ⬜ |
-| | 3.2 Search & filter | ⬜ |
-| | 3.3 Mentor profile page | ⬜ |
+| 3 Mentor discovery | 3.1 Mentor directory | ✅ |
+| | 3.2 Search & filter | ✅ |
+| | 3.3 Mentor profile page | ✅ |
 | 4 Requests | 4.1 Request form | ⬜ |
 | | 4.2 Persistence | ⬜ |
 | | 4.3 Requester dashboard | ⬜ |
@@ -139,6 +139,43 @@ BUILD_PLAN synchronized; lint/tsc/build re-verified clean.*
 instance config, hashing, storage, API route, server actions, forms, DAL
 guards, proxy, cookie mechanics, verified flows, configuration, testing
 notes). BUILD_PLAN 2.1 links to it.*
+
+### 2026-08-05 — Stage 3: Mentor discovery
+
+- **Done:** `/mentors` directory — eager-loaded query (user name + skills,
+  skill catalog in parallel `Promise.all`), `MentorCard` (name, experience
+  badge, clamped bio, skill badges, view-profile link), responsive grid,
+  dashed empty state. Search & filter — GET form (no client JS): `q` search
+  (`contains` = ILIKE, OR on name/bio) + shadcn `select` for `?skill=`
+  (base-ui popup with hidden form input; matches skill name
+  case-insensitively through `mentor_skills`). Profile page
+  `/mentors/[id]` — UUID-format pre-check, `notFound()` for unknown ids,
+  name/years/bio/skills + `RequestCta` (anonymous → sign-in/up links;
+  signed-in → disabled button until Phase 4). Also fixed a stale
+  `/auth/signup` link on the landing page.
+- **Verified:** lint + build + tsc clean. Live smoke on throwaway `next
+  start -p 3100`: all 4 mentors listed; `?skill=Data Analysis` → only
+  Amara; `?q=priya` → only Priya; combined no-match → empty state with
+  Clear filters; malformed and random UUID → 404; profile renders
+  (name/9 years/bio/skills); anon CTA links to `/login` + `/signup`;
+  authed CTA renders disabled button. Test server killed, sessions cleaned,
+  temp artifacts removed.
+- **Decisions:** URL-driven filters over client state (progressive
+  enhancement, no debounce needed); skill filter by name not UUID; shared
+  `MentorWithRelations` payload type instead of hand-written shapes; the
+  request CTA is an honest disabled placeholder until Phase 4.
+- **Next:** Step 4.1 — request form.
+
+*Follow-up same day (regression fix): `/dashboard` caused an infinite
+redirect loop that crashed the browser — root cause: a stale
+`better-auth.session_token` cookie (session row gone) made the proxy
+redirect `/login` → `/dashboard` on cookie presence while `requireUser`
+redirected back to `/login` (no DB session). Fixed by removing auth-route
+handling from `proxy.ts` and moving the signed-in redirect into the
+`(auth)` layout, where `getSession()` validates against the DB — a stale
+cookie now lands on the login form instead of looping. Verified live on a
+throwaway server: stale `/dashboard` → `/login` → 200 form (chain
+terminates), valid session `/login`/`/signup` → `/dashboard`.*
 
 ### 2026-08-05 — Role model pivot: no fixed roles
 

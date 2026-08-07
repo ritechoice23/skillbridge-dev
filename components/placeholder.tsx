@@ -1,6 +1,5 @@
-import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { LinkButton } from "@/components/link-button";
 import {
   Card,
   CardContent,
@@ -41,9 +40,9 @@ export function Placeholder({
           )}
         </CardContent>
         <CardFooter>
-          <Button variant="outline" render={<Link href="/" />}>
+          <LinkButton variant="outline" href="/">
             Back home
-          </Button>
+          </LinkButton>
         </CardFooter>
       </Card>
     </section>

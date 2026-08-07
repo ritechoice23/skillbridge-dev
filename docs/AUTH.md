@@ -194,15 +194,19 @@ export async function requireMentorProfile() {                           // :21-
 ```ts
 const hasSession = Boolean(getSessionCookie(request));                   // :11
 if (isProtected && !hasSession) → 307 /login                             // :13-15
-if (isAuthRoute && hasSession)   → 307 /dashboard                        // :17-19
 ```
 
 - `getSessionCookie` (from `better-auth/cookies`) only parses the cookie —
   no DB, edge-safe.
-- Protected: `/dashboard`, `/inbox`, `/profile`. Auth routes: `/login`,
-  `/signup`.
+- Protected: `/dashboard`, `/inbox`, `/profile` — an optimistic pre-check
+  only; a cookie alone never grants access (the server-side DAL decides).
 - `config.matcher` (`:24-26`) excludes `/api`, `_next/*`, and image/static
   files.
+- **Auth routes are NOT handled by the proxy** — redirecting `/login` and
+  `/signup` on cookie *presence* caused a redirect loop (`/dashboard` →
+  `/login` → `/dashboard` → …) when a cookie was present but its `sessions`
+  row was gone (expired/revoked/deleted). The signed-in redirect lives in
+  the `(auth)` layout instead, where the session is DB-validated.
 
 **Server-side guards (authoritative):**
 
@@ -212,6 +216,7 @@ if (isAuthRoute && hasSession)   → 307 /dashboard                        // :1
 | `app/(mentor)/layout.tsx` | `requireUser()` |
 | `app/(mentor)/inbox/page.tsx:10` | `requireMentorProfile()` |
 | `app/(mentor)/profile/page.tsx` | `requireUser()` (+ `setup` param) |
+| `app/(auth)/layout.tsx` | `getSession()`; valid session → `redirect("/dashboard")` |
 
 ## 9. Session-aware UI — `components/layout/nav.tsx`
 
@@ -261,7 +266,8 @@ set-cookie: better-auth.session_token=<token>.<signature>;
 | Wrong password | `signIn` | 401 → "Invalid email or password." |
 | Demo mentor login | `signIn` (bcrypt verify) | 200, session row |
 | Protected page, no cookie | `proxy.ts` | 307 → `/login` |
-| Auth route, cookie present | `proxy.ts` | 307 → `/dashboard` |
+| Auth route, valid session | `(auth)` layout (DB-validated) | 307 → `/dashboard` |
+| Protected page, stale cookie | `proxy` + `requireUser` | 307 → `/login` → form renders (no loop) |
 | Sign-out | `signOut` | 200, `sessions` row deleted, `get-session` → null |
 | CSRF | mutation without `Origin` | 400 `MISSING_OR_NULL_ORIGIN` |
 | FK restrict | delete user with live session | 23503 (no cascade) |
