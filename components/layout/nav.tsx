@@ -9,7 +9,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { getSession } from "@/lib/auth/dal";
+import { getSession, isMentor } from "@/lib/auth/dal";
 import { signOut } from "@/lib/actions/auth";
 
 const primaryLinks = [{ href: "/mentors", label: "Find Mentors" }];
@@ -17,9 +17,14 @@ const primaryLinks = [{ href: "/mentors", label: "Find Mentors" }];
 export async function Nav() {
   const session = await getSession();
   const user = session?.user;
+  const mentor = user ? await isMentor() : false;
 
   const authLinks = user
-    ? [{ href: "/dashboard", label: "Dashboard" }]
+    ? [
+        { href: "/dashboard", label: "My Requests" },
+        { href: "/profile", label: "Mentor Profile" },
+        ...(mentor ? [{ href: "/inbox", label: "Inbox" }] : []),
+      ]
     : [
         { href: "/login", label: "Sign in" },
         { href: "/signup", label: "Get started" },
@@ -41,11 +46,13 @@ export async function Nav() {
         </Link>
 
         <div className="hidden items-center gap-1 sm:flex">
-          {primaryLinks.map((link) => (
-            <LinkButton key={link.href} href={link.href} variant="ghost">
-              {link.label}
-            </LinkButton>
-          ))}
+          {(user ? [...primaryLinks, ...authLinks] : primaryLinks).map(
+            (link) => (
+              <LinkButton key={link.href} href={link.href} variant="ghost">
+                {link.label}
+              </LinkButton>
+            ),
+          )}
         </div>
 
         {user ? (
@@ -67,7 +74,6 @@ export async function Nav() {
             <LinkButton href="/signup">Get started</LinkButton>
           </div>
         )}
-
         <div className="sm:hidden">
           <Sheet>
             <SheetTrigger

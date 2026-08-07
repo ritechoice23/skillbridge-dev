@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { prisma } from "@/lib/db";
+import { getMentorDirectory } from "@/lib/actions/mentors";
 import { LinkButton } from "@/components/link-button";
 import { MentorCard } from "@/components/mentor-card";
 import { MentorFilters } from "@/components/mentor-filters";
@@ -22,36 +22,10 @@ export default async function MentorsPage({
   const search = firstValue(q);
   const skillFilter = firstValue(skill);
 
-  const where = (() => {
-    const conditions: {
-      skills?: { some: { skill: { name: { equals: string; mode: "insensitive" } } } };
-      OR?: ({ user: { name: { contains: string; mode: "insensitive" } } } | { bio: { contains: string; mode: "insensitive" } })[];
-    } = {};
-    if (skillFilter && skillFilter !== "all") {
-      conditions.skills = {
-        some: { skill: { name: { equals: skillFilter, mode: "insensitive" } } },
-      };
-    }
-    if (search) {
-      conditions.OR = [
-        { user: { name: { contains: search, mode: "insensitive" } } },
-        { bio: { contains: search, mode: "insensitive" } },
-      ];
-    }
-    return conditions;
-  })();
-
-  const [mentors, skills] = await Promise.all([
-    prisma.mentorProfile.findMany({
-      where,
-      include: {
-        user: { select: { name: true } },
-        skills: { include: { skill: { select: { name: true } } } },
-      },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.skill.findMany({ orderBy: { name: "asc" } }),
-  ]);
+  const { mentors, skills } = await getMentorDirectory({
+    q: search || undefined,
+    skill: skillFilter || undefined,
+  });
 
   const hasFilters = Boolean(search || (skillFilter && skillFilter !== "all"));
 

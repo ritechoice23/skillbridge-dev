@@ -18,6 +18,18 @@ export async function requireUser() {
   return session;
 }
 
+export async function isMentor() {
+  const session = await getSession();
+  if (!session) {
+    return false;
+  }
+  const profile = await prisma.mentorProfile.findUnique({
+    where: { userId: session.user.id },
+    select: { id: true },
+  });
+  return profile !== null;
+}
+
 export async function requireMentorProfile() {
   const session = await requireUser();
   const profile = await prisma.mentorProfile.findUnique({

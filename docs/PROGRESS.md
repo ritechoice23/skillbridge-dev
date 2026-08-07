@@ -6,9 +6,9 @@ append a session log entry.
 
 **Status legend:** ⬜ pending · 🔵 in progress · ✅ done
 
-**Overall progress:** 11 / 18 build steps done (docs system complete).
+**Overall progress:** 16 / 18 build steps done (docs system complete).
 
-**Current phase:** 4 — Requests
+**Current phase:** 6 — Polish & ship
 
 ---
 
@@ -27,11 +27,11 @@ append a session log entry.
 | 3 Mentor discovery | 3.1 Mentor directory | ✅ |
 | | 3.2 Search & filter | ✅ |
 | | 3.3 Mentor profile page | ✅ |
-| 4 Requests | 4.1 Request form | ⬜ |
-| | 4.2 Persistence | ⬜ |
-| | 4.3 Requester dashboard | ⬜ |
-| 5 Mentor side | 5.1 Profile management | ⬜ |
-| | 5.2 Inbox & respond | ⬜ |
+| 4 Requests | 4.1 Request form | ✅ |
+| | 4.2 Persistence | ✅ |
+| | 4.3 Requester dashboard | ✅ |
+| 5 Mentor side | 5.1 Profile management | ✅ |
+| | 5.2 Inbox & respond | ✅ |
 | 6 Polish & ship | 6.1 Empty/error states | ⬜ |
 | | 6.2 SEO & meta | ⬜ |
 | | 6.3 Build & deploy | ⬜ |
@@ -189,3 +189,120 @@ terminates), valid session `/login`/`/signup` → `/dashboard`.*
   role picker; steps 2.2/4.x/5.1 reworded; index note and phase table).
   Signup placeholder copy updated. `app/(auth)/signup/page.tsx` text only.
 - **Next:** Step 1.1 — database setup (Postgres via EnvKit).
+
+### 2026-08-07 — Stage 4: Requests
+
+- **Done:** Request form (`components/request-form.tsx`,
+  `lib/validation/request.ts`) rendered on `/mentors/[id]` inside
+  `RequestCta` for signed-in users (anonymous keeps sign-in/up links).
+  `createMentorshipRequest` Action (`lib/actions/requests.ts`):
+  `requireUser` → mentor lookup → self-request block → skill-membership
+  check → duplicate-pending check + insert in one interactive
+  `$transaction`; `skillId` optional (nullable skill → `IS NULL` match).
+  `/dashboard` is a real page now: own requests only (eager-loaded mentor
+  name + skill), status badges, `decided_at`, empty state with "Find a
+  mentor" CTA. Landing "Become a mentor" is session-aware (signed-in →
+  `/profile`, anon → `/signup`) — kills the earlier dead-end.
+- **Verified:** lint + tsc + build clean. Live smoke on throwaway `next
+  start -p 3100` (server-action POSTs replicated via the form's hidden
+  `$ACTION_*` fields): request created (row `pending`, correct requester +
+  skill); duplicate same-skill rejected; second skill + no-skill requests
+  allowed (3 rows); self-request blocked; crafted invalid skill rejected;
+  unknown mentor id → "no longer exists"; 2001-char message rejected;
+  missing `skillId` field (null) accepted after fixing the schema;
+  dashboard as priya → 3 cards w/ badges, as tunde → empty state; anon CTA
+  + landing hrefs correct (anon `/signup`, signed-in `/profile`). Cleanup:
+  test rows + sessions deleted, server killed, temp files removed.
+- **Bug found & fixed in verification:** `z.string().uuid().optional()`
+  rejects a missing form field (`null`) with a generic "Invalid input" —
+  schema now `union([uuid, literal(""), null])` → `undefined`.
+- **Decisions:** form inline on the profile page (BUILD_PLAN default);
+  duplicate protection = transaction check only (MVP race accepted);
+  inline success state over redirect; `$ACTION_KEY` hidden fields are
+  per-page — curl replays must use the target page's key.
+- **Next:** Step 5.1 — profile management (mentor side).
+
+### 2026-08-07 — Stage 5.1: Mentor profile management
+
+- **Done:** `/profile` is a real create/edit page. `upsertMentorProfile`
+  Action (`lib/actions/profiles.ts`): `requireUser` → zod validation
+  (`lib/validation/profile.ts`: bio 10–2000, years `^\d+$` → 0–99, skill
+  uuids) → catalog membership check → one transaction (create/update
+  profile, `deleteMany` + `createMany` mentor_skills — explicit replace,
+  no cascades). `getProfileEditor(userId)` + `getMentorDirectory`/
+  `getMentorProfile` (`lib/actions/mentors.ts`) — **directory DB queries
+  moved out of the page components into the actions layer** (user
+  request). `MentorProfileForm` (client, `useActionState`): bio, years,
+  skill chips pre-checked when editing; success links to the live
+  `/mentors/[id]` page. `app/(mentor)/profile/page.tsx` switches
+  create/edit copy, keeps `?setup=1` message.
+- **Verified:** lint + tsc + build clean. Live smoke on throwaway :3100:
+  fresh sign-up → `/profile` shows the create form; POST create (2 skills)
+  → row + 2 mentor_skills + success UI; new mentor appears in `/mentors`
+  and under `?skill=Data Analysis` (action-backed query); edit pre-fills
+  bio/years/2 checked chips; POST edit (1 skill) → bio/years updated,
+  mentor_skills replaced; short bio / empty years / years 100 rejected
+  inline. Cleanup: mentor_skills → profile → session → account → user
+  (RESTRICT order), server killed, temp files removed. One test-note: a
+  valid-but-misleading "Too short." (10 chars) passed `min(10)` — expected.
+- **Decisions:** profile ownership always derived from `session.user.id`
+  (never client-supplied); years parsed via regex-transform instead of
+  `z.coerce.number()` (coerce maps missing/empty → `0`, silently valid);
+  queries live in `lib/actions/*` (server-only), pages stay thin.
+- **Next:** Step 5.2 — inbox & respond.
+
+*Follow-up same day (multi-skill requests): the skill picker showed UUIDs
+instead of names — base-ui `SelectValue` falls back to the raw value when
+it can't resolve an item label (invisible earlier only because the filters
+select used skill *names* as values). Replaced the select with native
+checkbox chips (`name="skillIds"` → `FormData.getAll`, no client JS).
+Requests now support multiple skills: migration
+`20260807150000_add_mentorship_request_skills` adds the
+`mentorship_request_skills` join table (UUID PK, RESTRICT FKs, unique
+`(request_id, skill_id)`) and drops `mentorship_requests.skill_id` after a
+backfill (no-op — table empty). Action checks every submitted skill
+against the mentor's offered skills and reports per-skill duplicates by
+name; request + join rows created in one transaction. Dashboard renders
+sorted skill names via the join. Verified live on throwaway :3100:
+multi-skill create (1 request + 2 join rows), per-skill duplicate rejected
+("already have a pending request for UI/UX Design"), no-skill and
+invalid-skill cases correct, `skill_id` column gone; cleanup done
+(join rows deleted before requests — RESTRICT FK, then test session by id,
+server killed, temp files removed). Note: better-auth `sessions.created_at`
+lags the DB clock — time-windowed session cleanup misses test rows; delete
+by id instead.*
+
+### 2026-08-07 — Stage 5.2: Inbox & respond
+
+- **Done:** `/inbox` is real (was a placeholder). `getInbox(mentorProfileId)`
+  read action (`lib/actions/inbox.ts`): requester name, sorted skill names,
+  message, status, timestamps; pending first, then decided (newest first).
+  `respondToRequest` Action (`lib/actions/requests.ts`): `requireUser` →
+  ownership check (`mentorProfile.userId === session.user.id`, non-owner
+  rejected server-side) → `updateMany({ id, status: "pending" })` setting
+  status + `decided_at`; count 0 → "already been responded to" (race-safe).
+  `InboxRequestActions` client component (per pending row, Accept/Decline
+  submit buttons via `useActionState`). Nav fix (the actual complaint):
+  signed-in users now see **My Requests**, **Mentor Profile**, and (when
+  they have a profile) **Inbox** in the header — previously only the mobile
+  sheet had them, desktop had no path to `/dashboard`, `/profile`, or
+  `/inbox`. `/dashboard` also moved to the actions layer
+  (`lib/actions/dashboard.ts`) and hardened with `requireUser()` — the old
+  `where: { requesterId: undefined }` dropped the filter and leaked all
+  requests to anonymous visitors.
+- **Verified:** lint + tsc + build clean. Live smoke on throwaway :3100:
+  Amara's inbox listed 3 pending requests (Babatunde + 2 smoke) with
+  skills/message/status; Accept → `accepted` + `decided_at`, page
+  re-rendered "You accepted this request on Aug 7, 2026" with actions gone;
+  Decline → `declined` + `decided_at`; re-accept → "This request has
+  already been responded to."; cross-mentor replay (Priya's session on
+  Amara's captured form) → "Only the mentor this request was sent to can
+  respond.", no mutation; non-mentor `/inbox` still redirects to
+  `/profile?setup=1`. Smoke rows fully deleted, Babatunde's real request
+  restored to untouched `pending`, server killed.
+- **Decisions:** optimistic `updateMany`-count guard instead of
+  read-then-write (double-click/race safe); `$ACTION_KEY` is
+  session-scoped and stable across re-renders (reusable for replays); SSR
+  text between JSX expressions is split by `<!-- -->` comment nodes — strip
+  comments before asserting on rendered text.
+- **Next:** Phase 6 — empty/error states, SEO & meta, build & deploy.

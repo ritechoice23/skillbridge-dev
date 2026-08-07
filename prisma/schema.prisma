@@ -85,11 +85,11 @@ model MentorProfile {
 }
 
 model Skill {
-  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name         String           @unique @db.VarChar(80)
-  mentorSkills MentorSkill[]
-  requests     MentorshipRequest[]
-  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  id            String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name          String                   @unique @db.VarChar(80)
+  mentorSkills  MentorSkill[]
+  requestSkills MentorshipRequestSkill[]
+  createdAt     DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@map("skills")
 }
@@ -108,21 +108,33 @@ model MentorSkill {
 }
 
 model MentorshipRequest {
-  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  requesterId     String         @map("requester_id") @db.Uuid
-  requester       User           @relation("Requester", fields: [requesterId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  mentorProfileId String         @map("mentor_profile_id") @db.Uuid
-  mentorProfile   MentorProfile  @relation(fields: [mentorProfileId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  skillId         String?        @map("skill_id") @db.Uuid
-  skill           Skill?         @relation(fields: [skillId], references: [id], onDelete: Restrict, onUpdate: NoAction)
-  message         String         @db.Text
-  status          String         @default("pending") @db.VarChar(20)
-  decidedAt       DateTime?      @map("decided_at") @db.Timestamptz(6)
-  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id              String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requesterId     String                   @map("requester_id") @db.Uuid
+  requester       User                     @relation("Requester", fields: [requesterId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  mentorProfileId String                   @map("mentor_profile_id") @db.Uuid
+  mentorProfile   MentorProfile            @relation(fields: [mentorProfileId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  skills          MentorshipRequestSkill[]
+  message         String                   @db.Text
+  status          String                   @default("pending") @db.VarChar(20)
+  decidedAt       DateTime?                @map("decided_at") @db.Timestamptz(6)
+  createdAt       DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([mentorProfileId])
   @@index([requesterId])
   @@index([status])
   @@map("mentorship_requests")
+}
+
+model MentorshipRequestSkill {
+  id        String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requestId String           @map("request_id") @db.Uuid
+  request   MentorshipRequest @relation(fields: [requestId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  skillId   String           @map("skill_id") @db.Uuid
+  skill     Skill            @relation(fields: [skillId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([requestId, skillId])
+  @@index([skillId])
+  @@map("mentorship_request_skills")
 }

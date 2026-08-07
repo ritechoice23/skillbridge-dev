@@ -8,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { getSession } from "@/lib/auth/dal";
 
 const steps = [
   {
@@ -30,7 +31,10 @@ const steps = [
   },
 ];
 
-export default function HomePage() {
+export default async function HomePage() {
+  const session = await getSession();
+  const becomeMentorHref = session ? "/profile" : "/signup";
+
   return (
     <div className="flex flex-1 flex-col">
       <section className="flex flex-col items-center gap-6 px-4 py-20 text-center sm:py-28">
@@ -49,7 +53,7 @@ export default function HomePage() {
             Find a mentor
             <ArrowRightIcon data-icon="inline-end" />
           </LinkButton>
-          <LinkButton size="lg" variant="outline" href="/signup">
+          <LinkButton size="lg" variant="outline" href={becomeMentorHref}>
             Become a mentor
           </LinkButton>
         </div>

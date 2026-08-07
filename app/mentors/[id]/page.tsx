@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ArrowLeftIcon } from "lucide-react";
-import { prisma } from "@/lib/db";
+import { getMentorProfile } from "@/lib/actions/mentors";
 import { Badge } from "@/components/ui/badge";
 import { LinkButton } from "@/components/link-button";
 import {
@@ -26,13 +26,7 @@ export default async function MentorProfilePage({
     notFound();
   }
 
-  const profile = await prisma.mentorProfile.findUnique({
-    where: { id },
-    include: {
-      user: { select: { name: true } },
-      skills: { include: { skill: { select: { name: true } } } },
-    },
-  });
+  const profile = await getMentorProfile(id);
   if (!profile) {
     notFound();
   }
@@ -85,7 +79,13 @@ export default async function MentorProfilePage({
         </CardContent>
       </Card>
 
-      <RequestCta />
+      <RequestCta
+        mentorProfileId={profile.id}
+        skills={profile.skills.map(({ skill }) => ({
+          id: skill.id,
+          name: skill.name,
+        }))}
+      />
     </div>
   );
 }

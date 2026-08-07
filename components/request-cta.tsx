@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { SendIcon } from "lucide-react";
 import { getSession } from "@/lib/auth/dal";
-import { Button } from "@/components/ui/button";
 import { LinkButton } from "@/components/link-button";
+import { RequestForm } from "@/components/request-form";
 import {
   Card,
   CardContent,
@@ -10,7 +10,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-export async function RequestCta() {
+export async function RequestCta({
+  mentorProfileId,
+  skills,
+}: {
+  mentorProfileId: string;
+  skills: { id: string; name: string }[];
+}) {
   const session = await getSession();
 
   return (
@@ -20,16 +26,7 @@ export async function RequestCta() {
       </CardHeader>
       <CardContent className="flex flex-col items-start gap-3">
         {session ? (
-          <>
-            <Button disabled>
-              <SendIcon />
-              Request mentorship
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              Sending requests arrives with the next stage of the build — the
-              form will live here.
-            </p>
-          </>
+          <RequestForm mentorProfileId={mentorProfileId} skills={skills} />
         ) : (
           <>
             <LinkButton href="/login">

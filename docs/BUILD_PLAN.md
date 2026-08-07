@@ -150,7 +150,6 @@ Indexes: unique on `(mentor_profile_id, skill_id)`; index on `skill_id`
 | id | uuid | PK, default `gen_random_uuid()` |
 | requester_id | uuid | NOT NULL, FK → users(id) ON DELETE RESTRICT ON UPDATE NO ACTION |
 | mentor_profile_id | uuid | NOT NULL, FK → mentor_profiles(id) ON DELETE RESTRICT ON UPDATE NO ACTION |
-| skill_id | uuid | NULL, FK → skills(id) ON DELETE RESTRICT ON UPDATE NO ACTION |
 | message | text | NOT NULL |
 | status | varchar(20) | NOT NULL, default `'pending'`, CHECK in (`pending`,`accepted`,`declined`) |
 | decided_at | timestamptz | NULL |
@@ -159,6 +158,21 @@ Indexes: unique on `(mentor_profile_id, skill_id)`; index on `skill_id`
 
 Indexes: `mentor_profile_id` (inbox query), `requester_id` (requester
 dashboard), `status`.
+
+### Table: `mentorship_request_skills`
+
+| Column | Type | Constraints |
+|---|---|---|
+| id | uuid | PK, default `gen_random_uuid()` |
+| request_id | uuid | NOT NULL, FK → mentorship_requests(id) ON DELETE RESTRICT ON UPDATE NO ACTION |
+| skill_id | uuid | NOT NULL, FK → skills(id) ON DELETE RESTRICT ON UPDATE NO ACTION |
+| created_at | timestamptz | NOT NULL, default now() |
+
+Indexes: unique on `(request_id, skill_id)`; index on `skill_id`.
+
+> A request can target many skills via this join table (added in migration
+> `20260807150000_add_mentorship_request_skills`, which also dropped the
+> original single `skill_id` column after backfill).
 
 ### Design decisions
 
@@ -497,40 +511,88 @@ dashboard), `status`.
 ### Step 4.1 — Request form
 
 - **Objective:** Any authenticated user can compose a mentorship request
-  (mentors included — a mentor is also a learner to others).
+  (mentors included — a mentor is also a learner to others), targeting one
+  **or more** skills.
 - **Tasks:**
-  - Zod schema: message (required, ≤ 2000 chars), optional skill (must be
-    one the mentor offers).
-  - Form on mentor profile page (or `/request/[mentorId]`); inline errors.
-- **Files:** `components/request-form.tsx`, `lib/validation/request.ts`.
-- **Acceptance criteria:** validation errors shown; mentor must be valid.
-- **Decisions:** Skill limited to the mentor's offered skills; message
-  required.
+  - Zod schema (`lib/validation/request.ts`): `message` (trimmed, 1–2000
+    chars), `skillIds` (array of uuids, optional, deduped in the Action).
+  - `RequestForm` (`components/request-form.tsx`, client, `useActionState`)
+    on the mentor profile page inside the `RequestCta` card: message
+    textarea (shadcn `textarea`), skill **checkbox chips** (`name="skillIds"`
+    → `FormData.getAll`), pending state, single inline error; success
+    replaces the form with a message + link to `/dashboard`.
+  - `RequestCta` receives `mentorProfileId` + skills (with ids) from
+    `app/mentors/[id]/page.tsx` (query includes `skill.id`); anonymous
+    branch unchanged.
+- **Files:** `components/request-form.tsx`, `components/request-cta.tsx`,
+  `lib/validation/request.ts`, `components/ui/textarea.tsx`,
+  `app/mentors/[id]/page.tsx`.
+- **Acceptance criteria:** validation errors shown; mentor must be valid;
+  self-requests blocked ("You can't request mentorship from yourself.");
+  message > 2000 chars rejected; multiple skills selectable at once (labels
+  show names, never ids).
+- **Decisions:** Skill chips are native checkboxes (no client JS —
+  progressive enhancement, consistent with the filters form) instead of a
+  base-ui Select (whose `SelectValue` displays the raw value when it
+  cannot resolve an item label — with UUID values that showed the id, not
+  the name); skills validated server-side against `mentor_skills`, never
+  client-trusted; message required; inline success state instead of a
+  redirect.
 
 ### Step 4.2 — Persistence
 
-- **Objective:** Requests stored in PostgreSQL.
+- **Objective:** Requests stored in PostgreSQL; a request can target many
+  skills.
 - **Tasks:**
-  - `CreateMentorshipRequest` Action: auth check, duplicate-pending check,
-  - insert in a transaction, return result.
-  - Prevent double-pending (same requester + mentor + skill).
-- **Files:** `lib/actions/requests.ts`.
-- **Acceptance criteria:** row created with `pending`; duplicates rejected;
-  writes go through one Action.
-- **Decisions:** Duplicate check + insert in one transaction; no cascade
-  behaviour — only deliberate inserts.
+  - Join table `mentorship_request_skills` (migration
+    `20260807150000_add_mentorship_request_skills`): UUID PK, RESTRICT/NO
+    ACTION FKs to `mentorship_requests` and `skills`, unique
+    `(request_id, skill_id)`, index on `skill_id`; `mentorship_requests.skill_id`
+    dropped after backfill (forward-only; backfill was a no-op — no rows).
+  - `createMentorshipRequest` Action (`lib/actions/requests.ts`):
+    `requireUser()` → mentor profile lookup (missing → error state) →
+    self-request block → skill-membership check (all submitted skills must
+    be offered by this mentor) → duplicate-pending check (any submitted
+    skill already in a pending request to this mentor) + insert request +
+    `createMany` join rows inside one interactive `$transaction` →
+    returns `{ error, success }` state.
+  - Duplicate errors name the offending skill(s).
+- **Files:** `lib/actions/requests.ts`,
+  `prisma/migrations/20260807150000_add_mentorship_request_skills/migration.sql`.
+- **Acceptance criteria:** row created with `pending`; join rows for each
+  skill; per-skill duplicates rejected; writes go through one Action; empty
+  skill list allowed (no join rows).
+- **Decisions:** one request, many skills via a join table (no cascades —
+  cleanup deletes join rows explicitly before the request); duplicate
+  check + insert in one transaction; race between two concurrent identical
+  inserts accepted for MVP (no partial unique index).
 
 ### Step 4.3 — Requester dashboard
 
 - **Objective:** `/dashboard` lists the user's requests with status (any
   authenticated user, including mentors).
 - **Tasks:**
-  - Query by `requester_id`; show mentor name, skill, message snippet,
-    status badge; empty state.
+  - `app/dashboard/page.tsx`: `findMany` by `requester_id`,
+    `orderBy: createdAt desc`, eager-loading mentor name + skill name
+    (no N+1); greeting (`getSession`); status badge (pending →
+    `secondary`, accepted → `default`, declined → `destructive`);
+    `decided_at` line for decided requests; empty state with "Find a
+    mentor" CTA.
 - **Files:** `app/dashboard/page.tsx`.
 - **Acceptance criteria:** only own requests visible; status reflects
-  mentor's decision.
-- **Decisions:** Index on `requester_id` backs this query.
+  mentor's decision; empty state for users with no requests.
+- **Decisions:** Index on `requester_id` backs this query. Status is a
+  string (`pending`/`accepted`/`declined`) rendered via a small
+  `StatusBadge` mapping.
+
+### Step 4.4 — Landing CTA fix
+
+- **Objective:** "Become a mentor" on the landing page must not bounce
+  signed-in users to `/signup` (which redirects to `/dashboard`).
+- **Tasks:** `app/page.tsx` → `getSession()`; href is `/profile` when
+  signed in, `/signup` otherwise.
+- **Decision:** Session-aware CTA; nav "Get started" unchanged (signed-in
+  users see Dashboard instead).
 
 ---
 
@@ -542,31 +604,76 @@ dashboard), `status`.
   creating one makes them discoverable as a mentor (no sign-up role
   required).
 - **Tasks:**
-  - `UpsertMentorProfile` Action: transaction creating/updating profile and
-    replacing `mentor_skills` (explicit delete of old rows, then insert —
-    no cascade).
-  - Profile form: bio, experience years, multi-select skills
-    (from catalog); ownership enforced.
-- **Files:** `app/mentor/profile/page.tsx`, `components/mentor-profile-form.tsx`,
-  `lib/actions/profiles.ts`.
-- **Acceptance criteria:** edits persist; only the owning mentor can save;
-  skills list replaced atomically in a transaction.
+  - `upsertMentorProfile` Action (`lib/actions/profiles.ts`):
+    `requireUser()` → zod validation → catalog membership check for every
+    submitted skill → one interactive `$transaction`:
+    create-or-update the profile, `deleteMany` the old `mentor_skills`,
+    `createMany` the new rows (explicit replace — no cascade).
+  - `getProfileEditor(userId)` read action: profile (id, bio, years,
+    skill ids) + full skill catalog in parallel — no DB access in the
+    page.
+  - `MentorProfileForm` (`components/mentor-profile-form.tsx`, client,
+    `useActionState`): bio textarea, experience-years number input, skill
+    checkbox chips (pre-checked when editing); success state links to the
+    live profile (`/mentors/[id]`).
+  - `app/(mentor)/profile/page.tsx`: `requireUser` →
+    `getProfileEditor`; heading/description switch on create vs edit;
+    `?setup=1` copy kept for the inbox guard.
+- **Files:** `app/(mentor)/profile/page.tsx`,
+  `components/mentor-profile-form.tsx`, `lib/actions/profiles.ts`,
+  `lib/validation/profile.ts` (bio 10–2000 chars; years `^\d+$` → 0–99;
+  skill ids uuids).
+- **Acceptance criteria:** edits persist; only the owning user can save
+  (profile is always keyed by `session.user.id` — never a client-supplied
+  owner); skills list replaced atomically in a transaction; validation
+  errors inline.
 - **Decisions:** Replace-and-insert skill rows inside one transaction —
-  forward-only safe, no cascades.
+  forward-only safe, no cascades; `experienceYears` parsed from a
+  `^\d+$` string (avoids `z.coerce.number()` treating missing/empty
+  input as `0`).
 
 ### Step 5.2 — Inbox & respond
 
 - **Objective:** Mentor sees requests and accepts/declines.
 - **Tasks:**
-  - `/mentor/inbox`: list requests (by `mentor_profile_id`), newest first;
-    requester name, message, skill, status.
-  - `RespondToRequest` Action: only the owning mentor; sets status +
-    `decided_at` in a transaction; re-responding is blocked.
-- **Files:** `app/mentor/inbox/page.tsx`, `lib/actions/requests.ts`.
+  - `getInbox(mentorProfileId)` read action (`lib/actions/inbox.ts`,
+    `server-only`): requests for the profile with requester name, sorted
+    skill names, message, status, decided/created timestamps; pending
+    first, then decided — newest first.
+  - `respondToRequest` Action (`lib/actions/requests.ts`): parses
+    `requestId` + `decision` (accept|decline), `requireUser()`, loads the
+    request, verifies `request.mentorProfile.userId === session.user.id`
+    (ownership), then `updateMany({ where: { id, status: "pending" } })`
+    setting status + `decided_at` — a count of 0 means it was already
+    responded to (race-safe).
+  - `InboxRequestActions` (`components/inbox-request-actions.tsx`, client,
+    one per pending row): Accept/Decline submit buttons named `decision`
+    with hidden `requestId`; inline error text via `useActionState`.
+  - `app/(mentor)/inbox/page.tsx`: `requireMentorProfile` → `getInbox`;
+    request cards with StatusBadge; decided rows show "You accepted/
+    declined this request on <date>" (no action buttons).
+  - Nav: signed-in users get **My Requests** (`/dashboard`), **Mentor
+    Profile** (`/profile`), and — only when they have a profile —
+    **Inbox** (`/inbox`) in the header (desktop + mobile sheet), via
+    `isMentor()` in `lib/auth/dal.ts`.
+  - `/dashboard` moved to the actions layer (`lib/actions/dashboard.ts`
+    `getMyRequests(userId)`) and hardened with `requireUser()` — the old
+    `where: { requesterId: undefined }` silently dropped the filter and
+    exposed every request to anonymous visitors.
+- **Files:** `app/(mentor)/inbox/page.tsx`,
+  `components/inbox-request-actions.tsx`, `lib/actions/inbox.ts`,
+  `lib/actions/requests.ts` (+ `lib/validation/request.ts`
+  `respondRequestSchema`), `components/layout/nav.tsx`, `lib/auth/dal.ts`,
+  `lib/actions/dashboard.ts`, `app/dashboard/page.tsx`.
 - **Acceptance criteria:** only that mentor's requests visible; decision
-  saved once and reflected on the requester dashboard.
+  saved once and reflected on the requester dashboard; non-owner mentors
+  rejected server-side; re-responding blocked with a clear error.
 - **Decisions:** Status transitions: `pending → accepted | declined` only;
-  enforcement in Action (not just UI).
+  enforcement in Action (not just UI) with an optimistic
+  `updateMany`-count guard against double-decide races; `$ACTION_KEY` is
+  session-scoped (stable across re-renders); the accepted/decided note is
+  split by React `<!-- -->` comment nodes in SSR HTML (comment-strip
+  before text assertions in smoke tests).
 
 ---
 
