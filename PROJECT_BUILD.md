@@ -703,3 +703,78 @@ meta, build & deploy). When a mentor accepts, consider a visible
 "accepted" list somewhere on the mentor side (currently only the
 requester's dashboard shows the outcome; the inbox keeps the row with its
 badge — acceptable for now).
+
+## 14. Stage 6.4: DB-driven notifications (user-requested addition)
+
+**Trigger:** "in addition to the phase 6, also add a db driven
+notification page, we can have the lets me see your propsed db table" —
+the user asked to see the proposed table first. Proposals: one
+`notifications` table (UUID PK, RESTRICT FK to users, type CHECK, frozen
+title/body/link snapshot, nullable `read_at`), rows created inside the
+transactions of the triggering actions, page + header bell. User approved
+"Build it (page + bell)".
+
+**What was built:**
+
+- **Migration `20260807160000_add_notifications`** — as proposed, plus the
+  `(user_id, read_at)` composite index and the `notifications_type_check`
+  CHECK constraint, matching the existing hand-written migration style.
+- **Writes co-located with their mutations** (no event system):
+  - `createMentorshipRequest` — inside its existing interactive
+    transaction, after the request + skill joins: one `notification.create`
+    for the mentor (`request_received`, title "New mentorship request",
+    body with requester name + sorted skill names (or "…mentor them."),
+    link `/inbox`).
+  - `respondToRequest` — the update + notification were first written as
+    a `$transaction([...])` array, but array transactions run statements
+    in parallel: a stale replay would create a notification even when the
+    update matched 0 rows. Switched to an interactive transaction that
+    creates the notification only when the `updateMany` count is 1.
+- **`lib/actions/notifications.ts`** ("use server" — reads + writes in one
+  module, following `profiles.ts` precedent): `getNotifications(userId)`
+  (list + `unreadCount` via `Promise.all`; unread first via Prisma
+  `orderBy: [{ readAt: { sort: "asc", nulls: "first" } }, { createdAt:
+  "desc" }]` — plain ASC would sort Postgres NULLs last), unread count for
+  the nav, `markNotificationRead` (hidden `notificationId` + `link`;
+  `updateMany` scoped by `userId` + `readAt: null`; `redirect(link)` — the
+  whole unread row is a submit button, so "click = read + navigate"), and
+  `markAllNotificationsRead` (plain form action — no state needed).
+- **`app/notifications/page.tsx`** — `requireUser` → list; unread rows are
+  tinted submit buttons with a dot + "Mark all as read" (only when
+  unread > 0); read rows are Links; per-type icons; empty state.
+- **Nav** — desktop bell with badge (9+ cap) + aria-label with the count;
+  mobile sheet "Notifications (n)" link.
+
+**Key decisions:**
+
+- Denormalized snapshot (frozen at creation, no joins, survives renames).
+- The row *is* the navigation: `link` is validated (`startsWith("/")`,
+  ≤ 255) and used as the action's redirect target.
+- No events/listeners anywhere — notification rows are written by the
+  actions that own the state change, in the same transaction (atomicity).
+- Interactive (not array) transaction for respond+notify, so a stale
+  replay cannot fabricate a notification for a decision that never
+  happened.
+
+**Validation:** lint + tsc + production build clean. Live smoke on
+throwaway :3100: fresh sign-up → real request-form POST to Amara (1
+skill) → Amara's bell badge "1" + aria-label "Notifications (1 unread)"
++ page shows the unread `request_received` row (title, body with skill
+name, dot, "1 unread", Mark all as read); mark-all → "You're all caught
+up", button and dots gone; Amara accepts via inbox replay → requester's
+page shows unread `request_accepted` row ("Amara Johnson accepted your
+mentorship request."); row-click replay → 303 `Location: /dashboard`,
+`read_at` set (SQL-verified), row re-renders as a read Link. Cleanup:
+notifications → request_skills → request → sessions → accounts → user
+(RESTRICT order; sessions FK bit on the first attempt), Babatunde's
+request left `pending` untouched, server killed.
+
+**Notes for future work:**
+
+- git-bash `curl -F 'link=/dashboard'` silently rewrites the value to
+  `C:/Program Files/Git/dashboard` (MSYS path conversion of args starting
+  with `/`) — our schema correctly rejected it, but future replays of
+  any `-F` value that starts with `/` need `MSYS_NO_PATHCONV=1` (and
+  Windows-style paths for `-b`/`-D`/`-o`; the cookie jar also got
+  mangled, which looked like a session loss).
+- Steps 6.1–6.3 remain (empty/error states, SEO & meta, build & deploy).

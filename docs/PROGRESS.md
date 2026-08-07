@@ -6,7 +6,7 @@ append a session log entry.
 
 **Status legend:** ⬜ pending · 🔵 in progress · ✅ done
 
-**Overall progress:** 16 / 18 build steps done (docs system complete).
+**Overall progress:** 17 / 20 build steps done (docs system complete).
 
 **Current phase:** 6 — Polish & ship
 
@@ -35,6 +35,7 @@ append a session log entry.
 | 6 Polish & ship | 6.1 Empty/error states | ⬜ |
 | | 6.2 SEO & meta | ⬜ |
 | | 6.3 Build & deploy | ⬜ |
+| | 6.4 Notifications (added) | ✅ |
 
 ---
 
@@ -306,3 +307,59 @@ by id instead.*
   text between JSX expressions is split by `<!-- -->` comment nodes — strip
   comments before asserting on rendered text.
 - **Next:** Phase 6 — empty/error states, SEO & meta, build & deploy.
+
+### 2026-08-07 — Stage 6.4: DB-driven notifications (user-requested addition)
+
+- **Done:** `notifications` table (migration `20260807160000_add_notifications`:
+  UUID PK, RESTRICT FK → `users`, type CHECK `request_received |
+  request_accepted | request_declined`, denormalized title/body/link,
+  `read_at` nullable, `(user_id, read_at)` index). Notifications are
+  written **inside the same transaction** as the triggering action:
+  `createMentorshipRequest` → mentor gets `request_received` (link
+  `/inbox`); `respondToRequest` → requester gets `request_accepted` /
+  `request_declined` (link `/dashboard`), created only when the
+  conditional `updateMany` actually transitions the request (interactive
+  transaction — a stale replay can't produce a phantom notification).
+  `lib/actions/notifications.ts`: `getNotifications` (unread first via
+  `readAt: { sort: "asc", nulls: "first" }`), unread count, scoped
+  `markNotificationRead` (row submit → `redirect(link)`), plain-form
+  `markAllNotificationsRead`. `/notifications` page: unread rows are
+  tinted submit buttons with a dot, read rows are Links, type icons,
+  "Mark all as read" when unread > 0, empty state. Header bell with
+  unread badge (desktop) + "Notifications" link (mobile sheet).
+- **Verified:** lint + tsc + build clean. Live smoke on throwaway :3100:
+  real sign-up → real request form to Amara (1 skill) → Amara's bell
+  badge "1", aria-label "Notifications (1 unread)", page shows "New
+  mentorship request — Notif Smoker wants you to mentor them in Career
+  Coaching." unread; mark-all → "You're all caught up", button + dots
+  gone; Amara accepts → requester gets "Request accepted — Amara Johnson
+  accepted your mentorship request." unread; row click → 303 to
+  `/dashboard` + `read_at` set (SQL-verified); page then renders the row
+  as a read Link. Cleanup: notifications → request_skills → request →
+  sessions → accounts → user (RESTRICT order); Babatunde's request
+  untouched (`pending`); :3100 killed.
+- **Decisions:** snapshot text denormalized (frozen at creation); `link`
+  validated as a relative path and used as the redirect target ("click
+  row = mark read + navigate"); no event system — explicit notification
+  writes in the same transactions. Test-infra lesson: git-bash curl
+  rewrites `/dashboard`-style `-F` values into `C:/Program Files/Git/…`
+  (MSYS path conversion) — the schema correctly rejected it; use
+  `MSYS_NO_PATHCONV=1` (and Windows paths for `-b`/`-D`/`-o`) for such
+  replays.
+- **Next:** Steps 6.1, 6.2, 6.3 — empty/error states, SEO & meta,
+  build & deploy.
+
+### 2026-08-07 — Fix: stale dev-server Prisma client (repeat)
+
+- **Issue:** User reported `Cannot read properties of undefined (reading
+  'count')` at `lib/actions/notifications.ts:44` (`prisma.notification`)
+  from `Nav`. Root cause: the long-running dev server on :3000 had been
+  started **before** the notifications migration + `prisma generate`, so
+  its in-memory client had no `notification` model (`prisma.notification`
+  → undefined). Same class as the earlier multi-skill stale-client
+  incident — the fresh :3100 production server always worked.
+- **Fix:** killed the :3000 dev process (PID 33960), restarted via
+  `nohup npm run dev > .dev-server.log 2>&1`, verified by signing in and
+  loading `/` (nav runs the count query): 200, nav renders, no error.
+- **Rule (repeat):** after any `prisma generate`, restart long-running
+  dev servers — Turbopack serves the stale client until then.

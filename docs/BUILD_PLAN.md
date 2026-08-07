@@ -702,3 +702,50 @@ Indexes: unique on `(request_id, skill_id)`; index on `skill_id`.
 - **Files:** `README.md` (deploy notes).
 - **Acceptance criteria:** production build succeeds; app serves from
   production DB.
+
+### Step 6.4 — DB-driven notifications (added by user request)
+
+- **Objective:** A notification page driven by the database, plus an
+  unread-count bell — so requesters and mentors see outcomes and new
+  requests without hunting through pages.
+- **Tasks:**
+  - Migration `20260807160000_add_notifications`: `notifications` table
+    (UUID PK, `user_id` FK → `users` RESTRICT, `type` varchar(20) +
+    CHECK `request_received | request_accepted | request_declined`,
+    denormalized `title`/`body`/`link` snapshot, `read_at` nullable,
+    index `(user_id, read_at)`).
+  - Notifications are **created inside the same transaction** as the
+    triggering mutation — no event system: `createMentorshipRequest`
+    notifies the mentor (`request_received`, link `/inbox`); `respondToRequest`
+    notifies the requester (`request_accepted`/`request_declined`, link
+    `/dashboard`) — only after the conditional `updateMany` actually
+    transitions the request (an interactive transaction, so a stale
+    replay can't create a phantom notification).
+  - `lib/actions/notifications.ts` ("use server"): `getNotifications(userId)`
+    (list + unread count; unread first, then newest — `nulls: "first"`),
+    `getUnreadNotificationCount(userId)` (nav), `markNotificationRead`
+    (hidden `notificationId` + `link`, `requireUser`-scoped `updateMany`,
+    then `redirect(link)` — a whole unread row is a submit button), and
+    `markAllNotificationsRead` (plain form action).
+  - `app/notifications/page.tsx`: `requireUser` → list; unread rows are
+    tinted submit buttons with a dot, read rows are Links; type icons
+    (inbox / check / x); "Mark all as read" only when unread > 0; empty
+    state.
+  - Header nav: bell with unread-count badge (desktop, next to the name)
+    + "Notifications" link in the mobile sheet.
+- **Files:** `prisma/migrations/20260807160000_add_notifications/`,
+  `prisma/schema.prisma`, `lib/actions/notifications.ts`,
+  `lib/actions/requests.ts` (notification writes), `app/notifications/page.tsx`,
+  `components/layout/nav.tsx`.
+- **Acceptance criteria:** every request/response produces exactly one
+  notification for the right user; marking read is scoped to the session
+  user; read/unread rendering correct; bell count matches unread rows.
+- **Decisions:** denormalized snapshot text (frozen at creation, no
+  joins); `link` is a validated relative path (starts with `/`) — the
+  notification row is the navigation; unread-first ordering via Prisma
+  `readAt: { sort: "asc", nulls: "first" }` (Postgres ASC would put NULLs
+  last); `markNotificationRead` redirects to the notification target so
+  "click row = read + go"; git-bash `curl -F 'link=/dashboard'` rewrites
+  `/…` args into `C:/Program Files/Git/…` (MSYS path conversion) — use
+  `MSYS_NO_PATHCONV=1` in smoke tests (the schema correctly rejected the
+  mangled value).

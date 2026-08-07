@@ -17,6 +17,7 @@ model User {
   sessions      Session[]
   mentorProfile MentorProfile?
   sentRequests  MentorshipRequest[] @relation("Requester")
+  notifications Notification[]
   createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -137,4 +138,20 @@ model MentorshipRequestSkill {
   @@unique([requestId, skillId])
   @@index([skillId])
   @@map("mentorship_request_skills")
+}
+
+model Notification {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  type      String    @map("type") @db.VarChar(20)
+  title     String    @db.VarChar(120)
+  body      String    @db.Text
+  link      String    @db.VarChar(255)
+  readAt    DateTime? @map("read_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([userId, readAt])
+  @@map("notifications")
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { HandshakeIcon, MenuIcon } from "lucide-react";
+import { BellIcon, HandshakeIcon, MenuIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LinkButton } from "@/components/link-button";
 import {
@@ -10,6 +10,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { getSession, isMentor } from "@/lib/auth/dal";
+import { getUnreadNotificationCount } from "@/lib/actions/notifications";
 import { signOut } from "@/lib/actions/auth";
 
 const primaryLinks = [{ href: "/mentors", label: "Find Mentors" }];
@@ -18,6 +19,9 @@ export async function Nav() {
   const session = await getSession();
   const user = session?.user;
   const mentor = user ? await isMentor() : false;
+  const unreadNotifications = user
+    ? await getUnreadNotificationCount(user.id)
+    : 0;
 
   const authLinks = user
     ? [
@@ -57,6 +61,18 @@ export async function Nav() {
 
         {user ? (
           <div className="hidden items-center gap-2 sm:flex">
+            <Link
+              href="/notifications"
+              aria-label={`Notifications${unreadNotifications > 0 ? ` (${unreadNotifications} unread)` : ""}`}
+              className="relative rounded-md p-2 text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+            >
+              <BellIcon className="size-5" />
+              {unreadNotifications > 0 ? (
+                <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-none font-semibold text-primary-foreground">
+                  {unreadNotifications > 9 ? "9+" : unreadNotifications}
+                </span>
+              ) : null}
+            </Link>
             <span className="max-w-40 truncate text-sm text-muted-foreground">
               {user.name}
             </span>
@@ -99,11 +115,27 @@ export async function Nav() {
                   </LinkButton>
                 ))}
                 {user ? (
-                  <form action={signOut}>
-                    <Button variant="ghost" type="submit" className="justify-start">
-                      Sign out
-                    </Button>
-                  </form>
+                  <>
+                    <LinkButton
+                      href="/notifications"
+                      variant="ghost"
+                      className="justify-start"
+                    >
+                      Notifications
+                      {unreadNotifications > 0
+                        ? ` (${unreadNotifications})`
+                        : ""}
+                    </LinkButton>
+                    <form action={signOut}>
+                      <Button
+                        variant="ghost"
+                        type="submit"
+                        className="justify-start"
+                      >
+                        Sign out
+                      </Button>
+                    </form>
+                  </>
                 ) : null}
               </div>
             </SheetContent>

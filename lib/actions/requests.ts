@@ -117,6 +117,31 @@ export async function createMentorshipRequest(
       });
     }
 
+    const skillNames =
+      skillIds.length > 0
+        ? (
+            await tx.skill.findMany({
+              where: { id: { in: skillIds } },
+              select: { name: true },
+            })
+          )
+            .map((skill) => skill.name)
+            .sort()
+            .join(", ")
+        : null;
+
+    await tx.notification.create({
+      data: {
+        userId: profile.userId,
+        type: "request_received",
+        title: "New mentorship request",
+        body: skillNames
+          ? `${session.user.name} wants you to mentor them in ${skillNames}.`
+          : `${session.user.name} wants you to mentor them.`,
+        link: "/inbox",
+      },
+    });
+
     return { duplicate: false as const };
   });
 
@@ -155,8 +180,14 @@ export async function respondToRequest(
   const request = await prisma.mentorshipRequest.findUnique({
     where: { id: requestId },
     select: {
+      requesterId: true,
       status: true,
-      mentorProfile: { select: { userId: true } },
+      mentorProfile: {
+        select: {
+          userId: true,
+          user: { select: { name: true } },
+        },
+      },
     },
   });
   if (!request) {
@@ -170,11 +201,31 @@ export async function respondToRequest(
   }
 
   const status = decision === "accept" ? "accepted" : "declined";
-  const updated = await prisma.mentorshipRequest.updateMany({
-    where: { id: requestId, status: "pending" },
-    data: { status, decidedAt: new Date() },
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const result = await tx.mentorshipRequest.updateMany({
+      where: { id: requestId, status: "pending" },
+      data: { status, decidedAt: new Date() },
+    });
+    if (result.count === 0) {
+      return 0;
+    }
+    await tx.notification.create({
+      data: {
+        userId: request.requesterId,
+        type: status === "accepted" ? "request_accepted" : "request_declined",
+        title: status === "accepted" ? "Request accepted" : "Request declined",
+        body:
+          status === "accepted"
+            ? `${request.mentorProfile.user.name} accepted your mentorship request.`
+            : `${request.mentorProfile.user.name} declined your mentorship request.`,
+        link: "/dashboard",
+      },
+    });
+    return 1;
   });
-  if (updated.count === 0) {
+
+  if (updated === 0) {
     return {
       error: "This request has already been responded to.",
       success: false,
