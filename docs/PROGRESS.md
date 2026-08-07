@@ -363,3 +363,17 @@ by id instead.*
   loading `/` (nav runs the count query): 200, nav renders, no error.
 - **Rule (repeat):** after any `prisma generate`, restart long-running
   dev servers — Turbopack serves the stale client until then.
+
+### 2026-08-07 — Fix: Vercel build (Prisma generate timing)
+
+- **Issue:** Vercel deploy failed at `npm install` — the `postinstall:
+  prisma generate` script couldn't resolve `DATABASE_URL`
+  (`PrismaConfigEnvError`). Vercel does not inject project env vars into
+  the dependency-install step.
+- **Fix:** removed `postinstall`; `build` is now
+  `prisma generate && next build` (env vars ARE available during
+  `vercel build`). Verified locally from a clean state: deleted
+  `lib/generated`, ran `npm run build` — client regenerated + app built.
+- **Next:** set `DATABASE_URL` in Vercel project settings; the app also
+  needs a Postgres reachable from Vercel (local EnvKit Postgres won't be),
+  with `prisma migrate deploy` run against it.
