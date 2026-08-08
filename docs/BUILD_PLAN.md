@@ -686,6 +686,15 @@ Indexes: unique on `(request_id, skill_id)`; index on `skill_id`.
   boundaries, 404 page, form error handling review.
 - **Files:** `app/error.tsx`, `app/not-found.tsx`, components.
 - **Acceptance criteria:** every list/form has empty & error handling.
+- **Status:** ✅ done.
+- **Notes:** `/mentors` already had "No mentors found" (and invalid
+  search filters render it too); dashboard / inbox / notifications /
+  profile pages have per-page empty states; form errors are inline in
+  the request + mentor-profile forms; `not-found.tsx` (Card + "Back
+  home") existed. Added root `app/error.tsx` — a client boundary with a
+  "Try again" button calling `reset()` (renders the same flex-centered
+  Card as not-found). Invalid `/mentors/[id]` ids 404 via the UUID regex
+  + `notFound()` guards; no segment-level boundary needed.
 
 ### Step 6.2 — SEO & meta
 
@@ -693,6 +702,19 @@ Indexes: unique on `(request_id, skill_id)`; index on `skill_id`.
 - **Tasks:** `generateMetadata` per route; Open Graph basics; sitemap.
 - **Files:** `app/**/layout.tsx`, `app/**/page.tsx`, `app/sitemap.ts`.
 - **Acceptance criteria:** unique titles per page.
+- **Status:** ✅ done.
+- **Notes:** Root layout metadata extended with `applicationName` +
+  `openGraph` (title, description, `type: "website"`, siteName); the
+  description moved into a module-level const shared by the title
+  default and openGraph. Every route already had a static title except
+  `/mentors/[id]`, which now exports `generateMetadata` — mentor name
+  flows through the `%s | SkillBridge` template and the description
+  lists the mentor's skills (fallbacks: "Mentor Profile" for invalid/
+  missing profiles, generic mentor line when no skills). Added
+  `app/sitemap.ts` (`/`, `/mentors` weekly; `/login`, `/signup` yearly;
+  priority 1/0.9/0.4) and `app/robots.ts` (allow all + sitemap URL) —
+  both resolve `NEXT_PUBLIC_APP_URL` with a
+  `https://skillbridge-dev.vercel.app` fallback.
 
 ### Step 6.3 — Build & deploy
 
@@ -702,6 +724,19 @@ Indexes: unique on `(request_id, skill_id)`; index on `skill_id`.
 - **Files:** `README.md` (deploy notes).
 - **Acceptance criteria:** production build succeeds; app serves from
   production DB.
+- **Status:** ✅ done (deploy env setup is user-side).
+- **Notes:** README rewritten with the real stack, env-var table
+  (`DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`,
+  `NEXT_PUBLIC_APP_URL`), scripts, forward-only migration notes, and a
+  Vercel section (env vars for Preview + Production, hosted Postgres
+  required, `vercel.json` behavior). Added `db:migrate` script and
+  `.env.example` (plus `!.env.example` in `.gitignore`, which otherwise
+  swallows it via `.env*`). The `build` script is now
+  `prisma generate && prisma migrate deploy && next build` — every build
+  (local or Vercel) is self-contained. Verified from a clean state:
+  lint clean, `rm -rf lib/generated` → build regenerates client, applies
+  migrations, and produces a green production build with static
+  `/icon.svg`, `/robots.txt`, `/sitemap.xml` routes.
 
 ### Step 6.4 — DB-driven notifications (added by user request)
 

@@ -778,3 +778,56 @@ request left `pending` untouched, server killed.
   Windows-style paths for `-b`/`-D`/`-o`; the cookie jar also got
   mangled, which looked like a session loss).
 - Steps 6.1–6.3 remain (empty/error states, SEO & meta, build & deploy).
+## 15. Phase 6 finale: favicon, empty/error states, SEO, deploy prep
+
+**Trigger:** "work on phase 6 also change the favicon". All 20 build-plan
+steps are now done.
+
+**What was built:**
+
+- **Brand favicon** — removed the default `app/favicon.ico`; added
+  `app/icon.svg` (indigo gradient rounded square + handshake emoji,
+  echoing the nav logo). Next 16 auto-serves it as the favicon
+  (`<link rel="icon" href="/icon.svg?…" sizes="any" type="image/svg+xml">`).
+- **6.1 Empty/error states** — audit: every list/form already had empty
+  states and inline errors; `not-found.tsx` existed; invalid mentor ids
+  404 via UUID-regex + `notFound()`. Added root `app/error.tsx` (client
+  boundary, "Try again" reset button, same visual language as not-found).
+- **6.2 SEO & meta** — layout exports `applicationName` + `openGraph`
+  (shared `APP_DESCRIPTION` const); `/mentors/[id]` `generateMetadata`
+  (name → `%s | SkillBridge` template, skills in description);
+  `app/sitemap.ts` + `app/robots.ts` using
+  `NEXT_PUBLIC_APP_URL ?? https://skillbridge-dev.vercel.app`.
+- **6.3 Build & deploy** — README rewritten (stack, env table, scripts,
+  migrations, Vercel walkthrough); `db:migrate` script; `.env.example`
+  + `!.env.example` gitignore exception; `build` script now
+  `prisma generate && prisma migrate deploy && next build`.
+
+**Key decisions:**
+
+- Metadata is additive and static where possible — only the dynamic
+  mentor route got `generateMetadata`; everything else keeps static
+  titles (unique per page, template-suffixed).
+- Sitemap/robots fall back to the default Vercel origin so the files are
+  valid even before `NEXT_PUBLIC_APP_URL` is set; the env var overrides
+  it in production.
+- The build script owns migration application, so local builds, Vercel
+  builds, and `vercel.json`'s `buildCommand` all converge on one
+  idempotent `prisma migrate deploy`.
+
+**Validation:** lint clean; clean build from zero (`rm -rf lib/generated`
+→ generate + migrate deploy + next build, all green); prod smoke on
+throwaway :3100: favicon link + og meta on `/`, `robots.txt` and
+`sitemap.xml` served, `/mentors/9b5834a7-…` 200 with
+<title>Amara Johnson | SkillBridge</title> and mentor-specific
+description, non-UUID id 404s. Smoke server killed; `Babatunde`'s
+request and data untouched.
+
+**Notes for future work:**
+
+- My smoke test initially "failed" because I used Amara's **user** id
+  (`6f0e61b7…`) for the mentor-profile URL — the 404 was the app
+  correctly rejecting a non-profile id. Mentor profile ids live in
+  `mentor_profiles` (`9b5834a7…`).
+- Deploy remaining is user-side: push to GitHub, add Vercel env vars,
+  provision hosted Postgres (Neon/Supabase) for `DATABASE_URL`.

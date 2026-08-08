@@ -15,13 +15,22 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const APP_DESCRIPTION =
+  "Discover mentors for practical skills and send a mentorship request.";
+
 export const metadata: Metadata = {
   title: {
     default: "SkillBridge — Find a mentor for practical skills",
     template: "%s | SkillBridge",
   },
-  description:
-    "Discover mentors for practical skills and send a mentorship request.",
+  description: APP_DESCRIPTION,
+  applicationName: "SkillBridge",
+  openGraph: {
+    title: "SkillBridge — Find a mentor for practical skills",
+    description: APP_DESCRIPTION,
+    type: "website",
+    siteName: "SkillBridge",
+  },
 };
 
 export const viewport: Viewport = {

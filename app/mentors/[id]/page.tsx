@@ -11,12 +11,33 @@ import {
 } from "@/components/ui/card";
 import { RequestCta } from "@/components/request-cta";
 
-export const metadata: Metadata = {
-  title: "Mentor Profile",
-};
-
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export async function generateMetadata({
+  params,
+}: PageProps<"/mentors/[id]">): Promise<Metadata> {
+  const { id } = await params;
+  if (!UUID_RE.test(id)) {
+    return { title: "Mentor Profile" };
+  }
+
+  const profile = await getMentorProfile(id);
+  if (!profile) {
+    return { title: "Mentor Profile" };
+  }
+
+  const skillNames = profile.skills
+    .map(({ skill }) => skill.name)
+    .join(", ");
+
+  return {
+    title: profile.user.name,
+    description: skillNames
+      ? `${profile.user.name} offers mentorship in ${skillNames}.`
+      : `${profile.user.name} is available as a mentor on SkillBridge.`,
+  };
+}
 
 export default async function MentorProfilePage({
   params,

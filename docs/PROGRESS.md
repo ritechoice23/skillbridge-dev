@@ -6,9 +6,9 @@ append a session log entry.
 
 **Status legend:** ⬜ pending · 🔵 in progress · ✅ done
 
-**Overall progress:** 17 / 20 build steps done (docs system complete).
+**Overall progress:** 20 / 20 build steps done (docs system complete).
 
-**Current phase:** 6 — Polish & ship
+**Current phase:** 6 — Polish & ship (complete)
 
 ---
 
@@ -32,9 +32,9 @@ append a session log entry.
 | | 4.3 Requester dashboard | ✅ |
 | 5 Mentor side | 5.1 Profile management | ✅ |
 | | 5.2 Inbox & respond | ✅ |
-| 6 Polish & ship | 6.1 Empty/error states | ⬜ |
-| | 6.2 SEO & meta | ⬜ |
-| | 6.3 Build & deploy | ⬜ |
+| 6 Polish & ship | 6.1 Empty/error states | ✅ |
+| | 6.2 SEO & meta | ✅ |
+| | 6.3 Build & deploy | ✅ |
 | | 6.4 Notifications (added) | ✅ |
 
 ---
@@ -377,3 +377,42 @@ by id instead.*
 - **Next:** set `DATABASE_URL` in Vercel project settings; the app also
   needs a Postgres reachable from Vercel (local EnvKit Postgres won't be),
   with `prisma migrate deploy` run against it.
+
+### 2026-08-07 — Phase 6: polish, SEO, deploy prep + brand favicon
+
+- **Done (20/20 — build plan complete):**
+  - **Favicon:** replaced the default `app/favicon.ico` with a brand icon
+    `app/icon.svg` (indigo rounded square + handshake emoji, matching the
+    nav motif; Next 16 auto-generates the favicon link from it).
+  - **6.1 Empty/error states:** reviewed every list/form — `/mentors`
+    already had "No mentors found", dashboard/inbox/notifications/profile
+    have empty states, form errors are inline, `not-found.tsx` existed.
+    Added root `app/error.tsx` (client boundary, "Try again" reset) —
+    invalid mentor ids 404 through the existing notFound guards.
+  - **6.2 SEO & meta:** root layout now exports openGraph
+    (title/description/type/siteName, description hoisted to a const
+    shared with the page default); `/mentors/[id]` got
+    `generateMetadata` (mentor name as title via the template, skill
+    list in the description — verified "Amara Johnson | SkillBridge" +
+    "…mentorship in Data Analysis, Career Coaching."); every other page
+    already had a static title. Added `app/sitemap.ts` (/, /mentors,
+    /login, /signup with changeFrequency/priority) and `app/robots.ts`
+    (allow all + sitemap ref); both use
+    `NEXT_PUBLIC_APP_URL ?? https://skillbridge-dev.vercel.app`.
+  - **6.3 Build & deploy:** README rewritten (stack, env table, scripts,
+    migrations notes, Vercel steps: env vars for Preview+Production,
+    hosted Postgres requirement, vercel.json `prisma migrate deploy`
+    behavior). `npm run db:migrate` script added; `.env.example` created
+    (`.gitignore` needed `!.env.example` since `.env*` would swallow it).
+    Clean build verified from zero (`rm -rf lib/generated` →
+    `prisma generate && prisma migrate deploy && next build` — the build
+    script now includes migrate deploy, so every build is self-contained).
+  - **Validation:** lint clean; clean production build green; smoke on
+    throwaway :3100 — favicon link `/icon.svg?…` + og:title/type on `/`,
+    robots.txt + sitemap.xml static routes, mentor page 200 with dynamic
+    title/description, non-UUID id → 404. (A first "404" scare was my own
+    smoke-test mistake — used Amara's *user* id instead of her mentor
+    profile id `9b5834a7…`; the app was right.)
+- **Remaining for deploy (user side):** push branch; set env vars in
+  Vercel; create a hosted Postgres (Neon/Supabase) and point
+  `DATABASE_URL` at it.
