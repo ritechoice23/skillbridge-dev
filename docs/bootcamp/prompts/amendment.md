@@ -26,7 +26,7 @@ Please:
 9. Generate the Prisma client and create/apply the required migration.
 10. Verify that the application can connect to PostgreSQL.
 
-If anything already exists, reuse and align it instead of recreating it.
+If anything already exists, remove it and align it with what we have on the online git repository.
 
 Tell me only the environment values I need to provide manually.
 ```
@@ -57,7 +57,7 @@ Please:
 
 Do not build or redesign the login/signup UI yet.
 
-If something already exists, align it rather than replacing it unnecessarily.
+If anything already exists, remove it and align it with what we have on the online git repository.
 
 Tell me only the environment values I need to provide manually.
 ```
