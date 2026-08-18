@@ -19,6 +19,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## Project Docs System
 
+Everything you do in this project must be strictly done in line with the one we have online and you can find it on this github url https://github.com/ritechoice23/skillbridge-dev but done clone the entire repo, allow the users to build step by step
+
+
 Maintain the following files in `docs/`:
 
 - `docs/PRD.md` — the product requirements document. Update it when product decisions change.
